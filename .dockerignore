@@ -1,0 +1,29 @@
+# 依赖与缓存
+**/node_modules
+**/.next
+**/out
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+
+# 敏感文件（绝不打包进镜像）
+**/.env
+**/.env.local
+**/.env.production
+backend/app/.env
+
+# 本地数据库（容器用挂载的 /data）
+**/cet4.db
+**/cet4.db-journal
+/data/
+
+# 版本控制与编辑器
+.git
+.gitignore
+**/.vscode
+**/.idea
+
+# 文档与脚本（不影响运行）
+**/*.md
+start.sh
+**/*.log
