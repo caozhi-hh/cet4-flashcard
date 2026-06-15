@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+/* ========================================
+   腰子背单词 — 简约大气（米白 + 深棕）
+   ======================================== */
+@theme inline {
+  /* 米白 + 深棕配色（低饱和、克制、有质感） */
+  --color-cream: #FAF8F5;         /* 米白背景 */
+  --color-cream-deep: #F3EFE9;    /* 深米白 */
+  --color-milk: #FFFFFF;          /* 卡片纯白 */
+  --color-milk-warm: #FFFFFF;     /* 暖白（简约风用纯白） */
+  --color-milktea: #8B6F47;       /* 深棕主色 */
+  --color-caramel: #6B4423;       /* 焦糖深棕强调 */
+  --color-honey: #E8DFD3;         /* 细边框色 */
+  --color-cocoa: #3D2E1F;         /* 深棕文字（主） */
+  --color-cocoa-soft: #8A7A68;    /* 次级文字 */
+  --color-mint: #6B8E7F;          /* 雾绿（认识） */
+  --color-mint-deep: #4A6B5C;
+  --color-berry: #A8756B;         /* 雾粉棕（不认识） */
+  --color-berry-deep: #8B5A4F;
+
+  /* 字体堆栈 */
+  --font-sans: ui-rounded, "SF Pro Rounded", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, -apple-system, sans-serif;
+
+  --radius-cute: 1rem;            /* 圆角收小，更利落 */
+
+  /* 动画（克制：入场 + 按压 + 撒花，去掉 wiggle/sparkle 等花哨） */
+  --animate-fade-in: fade-in 0.4s ease-out both;
+  --animate-slide-up: slide-up 0.4s ease-out both;
+  --animate-bounce-in: slide-up 0.4s ease-out both;  /* 兼容旧类名，映射为简约上滑 */
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-pop: pop 0.3s ease-out;
+  --animate-shimmer: shimmer 2.5s linear infinite;
+  --animate-confetti: confetti-fall 2.2s ease-out forwards;
+  /* 注：wiggle/float-slow/sparkle/float-card 已移除，引用处自动失效（无动画=简约） */
+}
+
+/* ========================================
+   关键帧
+   ======================================== */
+@keyframes fade-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes slide-up {
+  0%   { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-5px); }
+}
+
+@keyframes pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes confetti-fall {
+  0%   { opacity: 1; transform: translateY(-60px) rotate(0deg); }
+  100% { opacity: 0; transform: translateY(100vh) rotate(720deg); }
+}
+
+/* ========================================
+   全局基础
+   ======================================== */
+body {
+  background: var(--color-cream);
+  color: var(--color-cocoa);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 滚动条（细、克制） */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-honey);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-cocoa-soft);
+}
+
+::selection {
+  background: var(--color-milktea);
+  color: #fff;
+}
+
+/* 进度条流光（克制版） */
+.shimmer-bar {
+  background-size: 200% 100%;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+  animation: shimmer 2.5s linear infinite;
+}
+
+@keyframes shimmer-slide {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 尊重「减少动画」偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ========================================
+   深色模式 — 墨黑（覆盖 token）
+   ======================================== */
+.dark {
+  --color-cream: #1A1714;
+  --color-cream-deep: #131110;
+  --color-milk: #252220;
+  --color-milk-warm: #252220;
+  --color-milktea: #B89476;
+  --color-caramel: #D4A574;
+  --color-honey: #3A322C;
+  --color-cocoa: #F0E9E0;
+  --color-cocoa-soft: #A89B8C;
+  --color-mint: #8FB3A0;
+  --color-mint-deep: #6B8E7F;
+  --color-berry: #C49088;
+  --color-berry-deep: #A8756B;
+}
+
+.dark body {
+  background: #1A1714;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #3A322C;
+}
