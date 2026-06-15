@@ -1,0 +1,28 @@
+# 依赖
+**/node_modules/
+**/.next/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+
+# 敏感文件
+**/.env
+**/.env.local
+**/.env.production
+backend/app/.env
+
+# 本地数据库
+**/cet4.db
+**/cet4.db-journal
+/data/
+
+# 前端构建产物（容器内构建，不入库）
+backend/static/
+frontend/out/
+
+# 编辑器
+.vscode/
+.idea/
+
+# 日志
+*.log
