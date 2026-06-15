@@ -56,6 +56,30 @@ app.include_router(starred.router)
 app.include_router(ai.router)
 
 
+@app.get("/api/debug")
+def debug():
+    """诊断端点：暴露 JSON 词数、DB 词数、代码指纹，定位词库问题"""
+    import json as _json
+    from .config import WORDS_JSON
+    from .models import Word
+    from .database import SessionLocal
+    info = {"code_version": "init_words-patch-v2"}
+    try:
+        with open(WORDS_JSON, "r", encoding="utf-8") as f:
+            info["json_word_count"] = len(_json.load(f))
+    except Exception as e:
+        info["json_word_count"] = f"ERR: {e}"
+    info["words_json_path"] = str(WORDS_JSON)
+    info["words_json_exists"] = WORDS_JSON.exists()
+    try:
+        db = SessionLocal()
+        info["db_word_count"] = db.query(Word).count()
+        db.close()
+    except Exception as e:
+        info["db_word_count"] = f"ERR: {e}"
+    return info
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
