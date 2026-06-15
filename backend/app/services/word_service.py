@@ -12,16 +12,25 @@ logger = logging.getLogger(__name__)
 
 
 def init_words(db: Session) -> int:
-    """从 JSON 初始化词库，返回新增数量"""
-    count = db.query(Word).count()
-    if count > 0:
-        logger.info(f"词库已存在 {count} 个词，跳过初始化")
-        return 0
+    """从 JSON 初始化/补齐词库，返回新增数量。
 
+    按 JSON 词数补齐：已有词数不足时导入缺失部分，保证词库始终完整。
+    （原先"词库非空就跳过"会导致残留旧数据无法更新到全量。）
+    """
     with open(WORDS_JSON, "r", encoding="utf-8") as f:
         words_data = json.load(f)
 
+    existing = db.query(Word).count()
+    if existing >= len(words_data):
+        logger.info(f"词库已完整 {existing} 个词，跳过初始化")
+        return 0
+
+    # 已有词的索引集合，避免重复导入
+    existing_words = {w.word for w in db.query(Word.word).all()}
+    added = 0
     for item in words_data:
+        if item["word"] in existing_words:
+            continue
         db.add(Word(
             word=item["word"],
             phonetic_us=item.get("phonetic_us"),
@@ -32,10 +41,11 @@ def init_words(db: Session) -> int:
             example_cn=item.get("example_cn"),
             frequency=item.get("frequency", 0),
         ))
+        added += 1
     db.commit()
 
-    logger.info(f"词库初始化完成，导入 {len(words_data)} 个词")
-    return len(words_data)
+    logger.info(f"词库补齐完成：原有 {existing}，新增 {added}，共 {existing + added} 个词")
+    return added
 
 
 def get_word(db: Session, word_id: int) -> Word | None:
