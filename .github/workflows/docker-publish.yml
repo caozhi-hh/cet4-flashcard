@@ -22,8 +22,9 @@ jobs:
 
       - name: Build and push image
         run: |
-          docker build -t $IMAGE:latest .
-          docker push $IMAGE:latest
+          # 同时打 latest + 版本号(用run编号,便于Sealos强制拉取新tag)
+          docker build -t $IMAGE:latest -t $IMAGE:r${{ github.run_number }} .
+          docker push --all-tags $IMAGE
 
       - name: Set image to public
         run: |
