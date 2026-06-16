@@ -5,9 +5,6 @@ on:
     branches: [ main ]
   workflow_dispatch:  # 支持手动触发
 
-env:
-  IMAGE: ghcr.io/caozhi-hh/cet4-flashcard
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,13 +17,24 @@ jobs:
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Build and push image
-        run: |
-          # 同时打 latest + 版本号(用run编号,便于Sealos强制拉取新tag)
-          docker build -t $IMAGE:latest -t $IMAGE:r${{ github.run_number }} .
-          docker push --all-tags $IMAGE
+      - name: Log in to Tencent Cloud TCR
+        run: docker login ccr.ccs.tencentyun.com -u "${{ secrets.TENCENT_USERNAME }}" -p "${{ secrets.TENCENT_PASSWORD }}"
 
-      - name: Set image to public
+      - name: Build and push image
+        env:
+          GHCR_IMAGE: ghcr.io/caozhi-hh/cet4-flashcard
+          TX_IMAGE: ccr.ccs.tencentyun.com/${{ secrets.TENCENT_NAMESPACE }}/cet4-flashcard
+          TAG: r${{ github.run_number }}
+        run: |
+          # 一次构建，同时打 ghcr + 腾讯云 的 latest + 版本号 tag
+          docker build \
+            -t $GHCR_IMAGE:latest -t $GHCR_IMAGE:$TAG \
+            -t $TX_IMAGE:latest -t $TX_IMAGE:$TAG \
+            .
+          docker push --all-tags $GHCR_IMAGE
+          docker push --all-tags $TX_IMAGE
+
+      - name: Set GHCR image to public
         run: |
           curl -sS -X PATCH \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
