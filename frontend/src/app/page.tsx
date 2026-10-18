@@ -5,19 +5,23 @@ import Link from "next/link";
 import { progressApi, wordbookApi } from "@/lib/api";
 import type { ProgressOverview, Wordbook } from "@/lib/types";
 import { getSelectedWordbook, onWordbookChange } from "@/lib/wordbook";
-import { getDailyGoal, setDailyGoal, onGoalChange, GOAL_OPTIONS } from "@/lib/settings";
+import { getDailyGoal, setDailyGoal, onGoalChange, GOAL_OPTIONS, DEFAULT_GOAL } from "@/lib/settings";
 
 export default function HomePage() {
   const [progress, setProgress] = useState<ProgressOverview | null>(null);
   const [wordbook, setWordbook] = useState<Wordbook | null>(null);
   const [selectedId, setSelectedId] = useState<string>(getSelectedWordbook());
-  const [goal, setGoalState] = useState<number>(getDailyGoal());
+  // 首帧用默认值：localStorage 在服务端读不到，直接拿它初始化 state 会造成 hydration 不一致
+  // （服务端 20 / 客户端 30 → React 报错并整段重渲染），挂载后再同步真实值。
+  const [goal, setGoalState] = useState<number>(DEFAULT_GOAL);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadAll = () => {
       const id = getSelectedWordbook();
       setSelectedId(id);
-      progressApi.getOverview(id).then(setProgress).catch(() => {});
+      setGoalState(getDailyGoal());
+      progressApi.getOverview(id).then(setProgress).catch((e: Error) => setError(e.message));
       wordbookApi.get(id).then(setWordbook).catch(() => {});
     };
     loadAll();
@@ -38,6 +42,13 @@ export default function HomePage() {
         </h1>
         <p className="text-cocoa-soft mt-1.5 text-sm">每天 {goal} 个词，轻松过四级</p>
       </div>
+
+      {/* 数据加载失败提示：不要用 "-" 和 "0 天" 把服务异常伪装成正常 */}
+      {error && !progress && (
+        <div className="bg-berry/10 border-2 border-berry/30 rounded-xl px-3 py-2 text-sm text-cocoa">
+          ⚠️ {error}
+        </div>
+      )}
 
       {/* 当前单词书 */}
       {wordbook && (
@@ -132,7 +143,7 @@ export default function HomePage() {
         >
           开始今日学习
         </Link>
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-3 gap-2.5">
           <Link
             href="/wordbooks"
             className="block py-3.5 bg-milk text-center rounded-xl font-medium text-cocoa border border-honey hover:border-cocoa-soft transition-colors active:scale-[0.98]"
@@ -144,6 +155,13 @@ export default function HomePage() {
             className="block py-3.5 bg-milk text-center rounded-xl font-semibold text-cocoa border border-honey hover:border-cocoa-soft transition-colors active:scale-[0.98]"
           >
             测验
+          </Link>
+          {/* 复习页此前没有任何入口，间隔重复等于白做 */}
+          <Link
+            href="/review"
+            className="block py-3.5 bg-milk text-center rounded-xl font-semibold text-cocoa border border-honey hover:border-cocoa-soft transition-colors active:scale-[0.98]"
+          >
+            复习
           </Link>
         </div>
       </div>

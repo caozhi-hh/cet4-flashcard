@@ -34,6 +34,7 @@ def list_starred(type: str | None = None, db: Session = Depends(get_db)):
                 "phonetic_us": w.phonetic_us, "phonetic_uk": w.phonetic_uk,
                 "definition": w.definition, "pos": w.pos,
                 "example": w.example, "example_cn": w.example_cn,
+                "tags": w.tags, "frq": w.frq,
                 "starred_type": r.type,
             })
     return {"words": result, "total": len(result)}

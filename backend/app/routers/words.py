@@ -28,6 +28,8 @@ def search_words(q: str = "", limit: int = 20, db: Session = Depends(get_db)):
             "phonetic_uk": w.phonetic_uk,
             "definition": w.definition,
             "pos": w.pos,
+            "tags": w.tags,
+            "frq": w.frq,
         }
         for w in words
     ]

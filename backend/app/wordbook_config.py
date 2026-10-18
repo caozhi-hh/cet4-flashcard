@@ -27,6 +27,42 @@ def _filter_pos(pos_str):
     return _f
 
 
+def _filter_tag(tag: str):
+    """按 ECDICT 考试标签筛选。
+
+    tags 存的是空格分隔的固定词表（zk gk cet4 cet6 ky toefl ielts gre），
+    这些标签互不为子串（如 cet4 与 cet6 不同、ky 与 gk 不同），所以 LIKE '%tag%' 不会误匹配。
+    """
+    def _f(query, Word):
+        return query.filter(Word.tags.like(f"%{tag}%"))
+    return _f
+
+
+def _filter_coca_top(threshold: int):
+    """按 COCA 真实语料词频取前 N 高频。
+
+    这里用"词频序号 <= 阈值"而不是 .limit(N)：apply_wordbook 既用于取词也用于统计总数，
+    在 filter 里塞 limit 会让 total/learned 统计失真。
+    阈值由富化后的数据算出（见 scripts/enrich_words_from_ecdict.py 输出）：
+      前 500 → frq ≤ 726，前 1000 → frq ≤ 1397，前 2000 → frq ≤ 2810
+    """
+    def _f(query, Word):
+        return query.filter(Word.frq.isnot(None), Word.frq > 0, Word.frq <= threshold)
+    return _f
+
+
+def _filter_min_collins(stars: int):
+    """柯林斯星级 ≥ stars（4 星以上 1267 词，5 星 448 词）"""
+    def _f(query, Word):
+        return query.filter(Word.collins.isnot(None), Word.collins >= stars)
+    return _f
+
+
+def _filter_oxford(query, Word):
+    """牛津核心 3000（2535 词）"""
+    return query.filter(Word.oxford == 1)
+
+
 # ===== 单词书定义 =====
 # (id, name, description, icon, color, filter_func)
 WORDBOOK_DEFS = [
@@ -37,9 +73,15 @@ WORDBOOK_DEFS = [
     ("nouns",        "名词专练",           "四级核心名词，扩大词汇量",                    "📖", "#F4A6A6", _filter_pos("n")),
     ("adj",          "形容词专练",          "四级核心形容词，提升表达能力",                 "🎨", "#C9A0DC", _filter_pos("adj")),
     ("breakthrough", "进阶突破 2000 词",    "中频进阶词汇 (1001-3000)，冲击高分",          "🚀", "#7FC8A9", _filter_freq_range(1001, 3000)),
+    # === 以下按 ECDICT 的考试标签与真实语料词频筛选（数据来源见 scripts/enrich_words_from_ecdict.py）===
+    ("exam_cet4",    "四级考纲标注词",      "ECDICT 标注 cet4 的 3300+ 词，最贴近考纲",    "🎯", "#D98F8F", _filter_tag("cet4")),
+    ("exam_cet6",    "六级拓展词",          "ECDICT 标注 cet6 的词，四级后继续拔高",       "📈", "#8FA8D9", _filter_tag("cet6")),
+    ("exam_ky",      "考研核心词",          "ECDICT 标注 ky（考研）的词，重合度极高",      "🎓", "#B9A8D8", _filter_tag("ky")),
+    ("coca1000",     "真·高频 1000（COCA）", "按 COCA 语料真实词频排的 1000 词（frq≤1397）", "📊", "#7FC8A9", _filter_coca_top(1397)),
+    ("collins4",     "柯林斯 4 星以上",      "柯林斯词典 4-5 星词（1267 词），优先掌握",     "🌟", "#E0B76E", _filter_min_collins(4)),
+    ("oxford3000",   "牛津核心 3000",        "收录于牛津核心 3000 的词（2535 词）",         "🏛", "#9FC8B0", _filter_oxford),
 ]
 
-# 默认单词书
 DEFAULT_WORDBOOK = "core1000"
 
 

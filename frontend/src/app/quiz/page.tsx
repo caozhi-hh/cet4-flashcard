@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import Confetti from "@/components/Confetti";
 import { quizApi, starredApi } from "@/lib/api";
 import { speak } from "@/lib/tts";
+import { useToast } from "@/components/ui/toast";
 import type { QuizQuestion, QuizResult } from "@/lib/types";
 
 export default function QuizPage() {
@@ -12,18 +14,46 @@ export default function QuizPage() {
   const [result, setResult] = useState<QuizResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [warn, setWarn] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  useEffect(() => {
-    quizApi.getDaily()
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    quizApi
+      .getDaily()
       .then((data) => {
         setQuestions(data.questions);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((e: Error) => {
+        // 不再把"服务不可用"显示成"还没有学过单词哦"
+        setError(e.message);
+        setLoading(false);
+      });
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const pick = (wordId: number, value: string) => {
+    setAnswers((prev) => ({ ...prev, [wordId]: value }));
+    setWarn(null);
+  };
 
   const handleSubmit = async () => {
     if (submitting) return;
+
+    // 未作答的题前端会以空串提交，后端按"没答对"处理（并会写入错题本）。
+    // 所以先要一次确认，避免手滑把没答完的卷交上去。
+    const blanks = questions.filter((q) => !(answers[q.word_id] || "").trim()).length;
+    if (blanks > 0 && !warn) {
+      setWarn(`还有 ${blanks} 题未作答。确认要提交就再点一次「提交答案」——未作答的题不计分，也不会改动学习进度。`);
+      return;
+    }
+
     setSubmitting(true);
 
     const payload = questions.map((q) => ({
@@ -35,15 +65,31 @@ export default function QuizPage() {
     try {
       const res = await quizApi.submit(payload);
       setResult(res);
+      setWarn(null);
       // 满分标记成就
       if (res.total > 0 && res.score >= res.total) {
         localStorage.setItem("cet4_quiz_perfect", "1");
       }
-      // 错题自动加入错题本（API 已去重，可重复调用）
-      for (const w of res.wrong_words) {
-        starredApi.add(w.id, "hard").catch(() => {});
+      // 错题自动加入错题本（API 已去重，可重复调用）。
+      // 原先每个词各自 .catch(() => {}) 静默吞掉；这里汇总成一条提示，避免逐条刷屏。
+      const failed: string[] = [];
+      await Promise.all(
+        res.wrong_words.map((w) =>
+          starredApi.add(w.id, "hard").catch(() => {
+            failed.push(w.word);
+          })
+        )
+      );
+      if (failed.length > 0) {
+        toast({
+          variant: "error",
+          title: `${failed.length} 个错题没能收进错题本`,
+          description: failed.slice(0, 5).join("、") + (failed.length > 5 ? " 等" : ""),
+        });
       }
-    } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "提交失败，请重试");
+    }
     setSubmitting(false);
   };
 
@@ -56,18 +102,34 @@ export default function QuizPage() {
     );
   }
 
+  if (questions.length === 0 && error) {
+    return (
+      <div className="text-center py-20 space-y-4 animate-bounce-in">
+        <div className="text-6xl inline-block">⚠️</div>
+        <h2 className="text-xl font-extrabold text-cocoa">加载失败</h2>
+        <p className="text-cocoa-soft font-medium">{error}</p>
+        <button
+          onClick={load}
+          className="inline-block mt-2 px-8 py-3 bg-cocoa text-milk rounded-2xl font-bold transition-all hover:bg-caramel active:scale-95"
+        >
+          🔄 重试
+        </button>
+      </div>
+    );
+  }
+
   if (questions.length === 0) {
     return (
       <div className="text-center py-20 space-y-4 animate-bounce-in">
         <div className="text-7xl inline-block animate-float">📝</div>
         <h2 className="text-2xl font-extrabold text-cocoa">还没有学过单词哦</h2>
         <p className="text-cocoa-soft font-medium">先去学习一些单词再来挑战吧 🌱</p>
-        <a
+        <Link
           href="/study"
           className="inline-block mt-4 px-8 py-3 bg-gradient-to-r from-milktea to-caramel text-white rounded-2xl font-bold shadow-lg shadow-caramel/30 active:scale-95"
         >
           📖 去学习
-        </a>
+        </Link>
       </div>
     );
   }
@@ -136,7 +198,7 @@ export default function QuizPage() {
                   return (
                     <button
                       key={j}
-                      onClick={() => setAnswers({ ...answers, [q.word_id]: optValue })}
+                      onClick={() => pick(q.word_id, optValue)}
                       className={`p-3 rounded-xl text-sm text-left border transition-all active:scale-95 ${
                         isSelected
                           ? "bg-cocoa text-milk border-cocoa font-medium"
@@ -167,7 +229,7 @@ export default function QuizPage() {
                         key={j}
                         onClick={() => {
                           speak(q.word);
-                          setAnswers({ ...answers, [q.word_id]: optValue });
+                          pick(q.word_id, optValue);
                         }}
                         className={`p-3 rounded-xl text-sm text-left border transition-all active:scale-95 ${
                           isSelected
@@ -191,41 +253,29 @@ export default function QuizPage() {
                   autoCorrect="off"
                   placeholder="输入英文单词"
                   value={answers[q.word_id] || ""}
-                  onChange={(e) => setAnswers({ ...answers, [q.word_id]: e.target.value })}
+                  onChange={(e) => pick(q.word_id, e.target.value)}
                   className="w-full p-3 border border-honey rounded-xl text-base focus:outline-none focus:border-cocoa bg-cream text-cocoa placeholder:text-cocoa-soft/50 transition-all tracking-wider font-mono"
                 />
                 <p className="text-xs text-cocoa-soft">根据上方中文释义拼写英文（区分大小写不敏感）</p>
               </div>
             )}
 
-            {q.quiz_type === "fill" && (
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  placeholder={q.hint || "输入英文单词"}
-                  value={answers[q.word_id] || ""}
-                  onChange={(e) => setAnswers({ ...answers, [q.word_id]: e.target.value })}
-                  className="w-full p-3 border border-honey rounded-xl text-sm focus:outline-none focus:border-cocoa bg-cream text-cocoa placeholder:text-cocoa-soft/50 transition-all"
-                />
-                {q.hint && <p className="text-xs text-cocoa-soft">💡 {q.hint}</p>}
-              </div>
-            )}
-
-            {q.quiz_type === "fill" && (
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  placeholder={q.hint || "输入英文单词"}
-                  value={answers[q.word_id] || ""}
-                  onChange={(e) => setAnswers({ ...answers, [q.word_id]: e.target.value })}
-                  className="w-full p-3 border-2 border-honey/50 rounded-2xl text-sm focus:outline-none focus:border-milktea focus:ring-2 focus:ring-milktea/20 bg-cream text-cocoa placeholder:text-cocoa-soft/50 transition-all"
-                />
-                {q.hint && <p className="text-xs text-cocoa-soft">💡 {q.hint}</p>}
-              </div>
-            )}
+            {/* 注：此处原有第二个 q.quiz_type === "fill" 分支，与上一分支重复且后端从不产出
+                fill 题型（只有 choice/listen/spell），属死代码，已删除。 */}
           </div>
         );
       })}
+
+      {warn && (
+        <div className="bg-berry/10 border-2 border-berry/30 rounded-xl px-3 py-2 text-sm text-cocoa">
+          ⚠️ {warn}
+        </div>
+      )}
+      {error && (
+        <div className="bg-berry/10 border-2 border-berry/30 rounded-xl px-3 py-2 text-sm text-cocoa">
+          ⚠️ {error}
+        </div>
+      )}
 
       <button
         onClick={handleSubmit}

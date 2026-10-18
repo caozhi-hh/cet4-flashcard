@@ -15,12 +15,11 @@ router = APIRouter(prefix="/api/progress", tags=["progress"])
 @router.get("/overview")
 def get_overview(wordbook: str | None = None, db: Session = Depends(get_db)):
     """进度总览 — total/learned/known 按当前词书过滤；today/streak 为全局每日统计"""
-    # 按词书过滤的词集
     word_query = apply_wordbook(db.query(Word), Word, wordbook, db)
     total = word_query.count()
 
-    # 当前词书范围内的词 id
-    word_ids_subq = word_query.with_entities(Word.id).subquery()
+    # .statement 取出底层 select()：直接传 Subquery 会被 SQLAlchemy 隐式强制转换并告警
+    word_ids_subq = word_query.with_entities(Word.id).statement
 
     # 已学/已掌握：StudyRecord 限定在词书范围内
     learned = db.query(StudyRecord).filter(StudyRecord.word_id.in_(word_ids_subq)).count()

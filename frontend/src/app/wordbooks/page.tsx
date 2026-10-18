@@ -5,6 +5,7 @@ import Link from "next/link";
 import { wordbookApi } from "@/lib/api";
 import type { Wordbook } from "@/lib/types";
 import { getSelectedWordbook, setSelectedWordbook, onWordbookChange } from "@/lib/wordbook";
+import { useToast } from "@/components/ui/toast";
 
 const EXAMPLES = ["和食物相关的词", "旅行出行", "情绪感受", "科技互联网", "校园生活", "高频动词"];
 
@@ -12,6 +13,7 @@ export default function WordbooksPage() {
   const [wordbooks, setWordbooks] = useState<Wordbook[]>([]);
   const [selected, setSelected] = useState<string>(getSelectedWordbook());
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   // AI 生成状态
   const [query, setQuery] = useState("");
@@ -64,7 +66,14 @@ export default function WordbooksPage() {
       await wordbookApi.remove(id);
       if (selected === id) handleSelect("core1000");
       loadWordbooks();
-    } catch {}
+    } catch (err) {
+      // 原先静默吞掉：删除失败时界面无任何反应，用户会以为删掉了
+      toast({
+        variant: "error",
+        title: "删除失败",
+        description: err instanceof Error ? err.message : "请确认后端服务在运行",
+      });
+    }
   };
 
   const presetBooks = wordbooks.filter((w) => !w.is_custom);

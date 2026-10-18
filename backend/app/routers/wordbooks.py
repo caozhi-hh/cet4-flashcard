@@ -67,14 +67,12 @@ def list_wordbooks(db: Session = Depends(get_db)):
 @router.get("/{wordbook_id}")
 def get_wordbook(wordbook_id: str, db: Session = Depends(get_db)):
     """获取单个单词书详情"""
-    # 自定义书
     if wordbook_id.startswith("custom_"):
         cid = int(wordbook_id[7:])
         wb = db.query(CustomWordbook).filter(CustomWordbook.id == cid).first()
         if not wb:
             raise HTTPException(status_code=404, detail="单词书不存在")
         return _custom_to_dict(db, wb)
-    # 预定义书
     filter_fn = get_preset_filter(wordbook_id)
     if filter_fn is None:
         raise HTTPException(status_code=404, detail="单词书不存在")

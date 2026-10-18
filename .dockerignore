@@ -10,6 +10,7 @@
 **/.env
 **/.env.local
 **/.env.production
+**/.env.development
 backend/app/.env
 
 # 本地数据库（容器用挂载的 /data）

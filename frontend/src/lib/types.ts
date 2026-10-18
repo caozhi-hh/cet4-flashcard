@@ -9,6 +9,10 @@ export interface Word {
   pos: string | null;
   example: string | null;
   example_cn: string | null;
+  /** ECDICT 考试标签，空格分隔，如 "gk cet4 cet6 ky" */
+  tags?: string | null;
+  /** COCA 语料词频序号（越小越高频） */
+  frq?: number | null;
 }
 
 export interface FlashCard {
@@ -17,11 +21,26 @@ export interface FlashCard {
   mnemonic?: string | null;
 }
 
+/** FSRS 四档评分：1 重来 / 2 困难 / 3 良好 / 4 简单 */
+export type Rating = 1 | 2 | 3 | 4;
+
 export interface StudyResponse {
   word_id: number;
+  rating: number;
   status: string;
   know_count: number;
   next_review_at: string | null;
+  interval_days: number;
+  fsrs_state: number;
+}
+
+/** 某一档评分对应的排程预览 */
+export interface RatingPreview {
+  rating: number;
+  label: string;
+  interval_days: number;
+  due: string;
+  fsrs_state: number;
 }
 
 export interface QuizQuestion {

@@ -5,6 +5,7 @@ import { progressApi } from "@/lib/api";
 import type { ProgressOverview, DailyProgress } from "@/lib/types";
 import { getSelectedWordbook, onWordbookChange } from "@/lib/wordbook";
 import { evaluateAchievements, countUnlocked, type AchievementExtra } from "@/lib/achievements";
+import { EMPTY_HISTORY, readHistory, type DictationHistory } from "@/lib/dictation";
 
 export default function ProgressPage() {
   const [overview, setOverview] = useState<ProgressOverview | null>(null);
@@ -13,10 +14,16 @@ export default function ProgressPage() {
     createdAiWordbook: typeof window !== "undefined" && localStorage.getItem("cet4_ai_created") === "1",
     quizPerfect: typeof window !== "undefined" && localStorage.getItem("cet4_quiz_perfect") === "1",
   }));
+  const [error, setError] = useState<string | null>(null);
+  // 默写成绩只存在本机 localStorage：挂载后再读，避免 SSR 读不到造成水合不一致
+  const [dictation, setDictation] = useState<DictationHistory>(EMPTY_HISTORY);
 
   useEffect(() => {
     const load = () => {
-      progressApi.getOverview(getSelectedWordbook()).then(setOverview).catch(() => {});
+      setError(null);
+      setDictation(readHistory());
+      // 失败时之前是空 catch，页面只剩一个标题，看不出是"服务挂了"还是"真的没数据"
+      progressApi.getOverview(getSelectedWordbook()).then(setOverview).catch((e: Error) => setError(e.message));
       progressApi.getCalendar(30).then(setCalendar).catch(() => {});
     };
     load();
@@ -27,6 +34,12 @@ export default function ProgressPage() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-extrabold text-cocoa text-center">📊 学习进度</h2>
+
+      {error && !overview && (
+        <div className="bg-berry/10 border-2 border-berry/30 rounded-xl px-3 py-2 text-sm text-cocoa">
+          ⚠️ {error}
+        </div>
+      )}
 
       {/* 成就徽章 */}
       {overview && (
@@ -67,6 +80,22 @@ export default function ProgressPage() {
           </div>
           <p className="text-sm text-cocoa-soft font-medium">
             🎯 已学习 <span className="text-caramel font-bold">{overview.learned_words}</span> / {overview.total_words} 个词汇
+          </p>
+        </div>
+      )}
+
+      {/* 默写量化反馈（借鉴 qwerty-learner 的速度/正确率，数据来自本机默写记录） */}
+      {dictation.sessions > 0 && (
+        <div className="bg-milk-warm rounded-3xl p-5 border-2 border-honey/50 shadow-sm shadow-caramel/10">
+          <h3 className="font-bold text-cocoa mb-3">✍️ 默写成绩</h3>
+          <div className="grid grid-cols-3 gap-3">
+            <DictStat label="最近正确率" value={`${dictation.lastAccuracy}%`} />
+            <DictStat label="历史最佳" value={`${dictation.bestAccuracy}%`} />
+            <DictStat label="最佳速度" value={`${dictation.bestCpm}`} unit="字符/分" />
+          </div>
+          <p className="text-xs text-cocoa-soft mt-3">
+            已默写 {dictation.sessions} 次
+            {dictation.lastAt ? ` · 最近 ${dictation.lastAt.slice(0, 10)}` : ""}
           </p>
         </div>
       )}
@@ -113,6 +142,16 @@ function MiniStat({ icon, label, value, color, delay }: { icon: string; label: s
       <div className="text-xl mb-0.5 inline-block">{icon}</div>
       <div className={`text-xl font-extrabold ${valueColor}`}>{value}</div>
       <div className="text-xs text-cocoa-soft">{label}</div>
+    </div>
+  );
+}
+
+function DictStat({ label, value, unit }: { label: string; value: string; unit?: string }) {
+  return (
+    <div className="text-center">
+      <div className="text-xl font-extrabold text-cocoa tabular-nums">{value}</div>
+      {unit && <div className="text-[10px] text-cocoa-soft">{unit}</div>}
+      <div className="text-xs text-cocoa-soft mt-0.5">{label}</div>
     </div>
   );
 }

@@ -3,7 +3,11 @@
 /* ========================================
    腰子背单词 — 简约大气（米白 + 深棕）
    ======================================== */
-@theme inline {
+/* 注意：这里必须是 @theme，不能写成 @theme inline。
+   inline 会把主题值直接编译成字面量（.text-cocoa{color:#3d2e1f}），
+   于是文件末尾 .dark{--color-cocoa:...} 的覆盖对任何工具类都失效 —— 暗色下标题会"隐形"。
+   去掉 inline 后工具类输出 var(--color-*)，.dark 覆盖才真正生效。 */
+@theme {
   /* 米白 + 深棕配色（低饱和、克制、有质感） */
   --color-cream: #FAF8F5;         /* 米白背景 */
   --color-cream-deep: #F3EFE9;    /* 深米白 */
@@ -77,7 +81,16 @@ body {
   color: var(--color-cocoa);
   font-family: var(--font-sans);
   min-height: 100vh;
+  min-height: 100dvh; /* 动态视口高度，适配手机浏览器栏伸缩 */
   -webkit-font-smoothing: antialiased;
+  /* iOS PWA 安全区：左右避免刘海/圆角遮挡（横屏时生效） */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* 底部导航：避让 iPhone 底部 Home Indicator，PWA standalone 下尤其重要 */
+nav.fixed.bottom-0 {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* 滚动条（细、克制） */

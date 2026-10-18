@@ -5,16 +5,26 @@
 **/*.pyc
 **/.pytest_cache/
 
+# 测试用的临时数据库（隔离库，跑完自动删）
+**/tests/.tmp-db/
+
+# 前端交互测试的打包产物
+**/tests/interaction/.tmp/
+
 # 敏感文件
 **/.env
 **/.env.local
 **/.env.production
+**/.env.development
 backend/app/.env
 
 # 本地数据库
 **/cet4.db
 **/cet4.db-journal
 /data/
+
+# 迁移/富化过程产生的备份（数据库与词库 JSON 的 .bak-<时间戳>）
+**/*.bak-*
 
 # 前端构建产物（容器内构建，不入库）
 backend/static/

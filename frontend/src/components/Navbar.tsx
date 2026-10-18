@@ -28,7 +28,9 @@ export default function Navbar() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-milk/90 backdrop-blur-md border-t border-honey md:relative md:border-t-0 md:border-b">
-      <div className="max-w-2xl mx-auto flex justify-around items-center h-14 md:h-12 px-2 relative">
+      {/* pr-14：给右上角绝对定位的主题按钮预留空间。原先只留 px-2，
+          按钮会压在最后一个导航项（进度）的图标上，点"📊"右侧会变成切换主题。 */}
+      <div className="max-w-2xl mx-auto flex justify-around items-center h-14 md:h-12 pl-2 pr-14 relative">
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href;
           return (
@@ -51,7 +53,7 @@ export default function Navbar() {
         {mounted && (
           <button
             onClick={() => toggleTheme()}
-            className="absolute top-1 right-2 md:top-1.5 md:right-2 w-8 h-8 flex items-center justify-center text-sm rounded-lg text-cocoa-soft hover:text-cocoa hover:bg-cream-deep transition-colors active:scale-90"
+            className="absolute top-1 right-2 md:top-0.5 md:right-2 w-10 h-10 flex items-center justify-center text-sm rounded-lg text-cocoa-soft hover:text-cocoa hover:bg-cream-deep transition-colors active:scale-90"
             title={theme === "dark" ? "切换亮色" : "切换暗色"}
             aria-label="切换主题"
           >

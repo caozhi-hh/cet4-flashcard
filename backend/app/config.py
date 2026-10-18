@@ -8,9 +8,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # === 代理绕过 ===
-# 本地若有系统代理(如 Clash 7897)会拦截后端到 dashscope 的请求，导致 AI Connection error
-# 把阿里云域名加入 NO_PROXY，强制直连。生产环境(HF Spaces)无此问题
-_AI_DOMAINS = "dashscope.aliyuncs.com,aliyuncs.com,127.0.0.1,localhost"
+# 本地若有系统代理(如 Clash 7897)会拦截后端到智谱的请求，导致 AI Connection error
+# 把智谱域名加入 NO_PROXY，强制直连。生产环境(HF Spaces)无此问题
+_AI_DOMAINS = "bigmodel.cn,dashscope.aliyuncs.com,aliyuncs.com,127.0.0.1,localhost"
 _existing = os.environ.get("NO_PROXY", "")
 if "aliyuncs" not in _existing:
     os.environ["NO_PROXY"] = f"{_existing},{_AI_DOMAINS}".strip(",") if _existing else _AI_DOMAINS
@@ -25,10 +25,10 @@ WORDS_JSON = BASE_DIR / "data" / "cet4_words.json"
 # === 数据库 ===
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
-# === AI 模型 ===
+# === AI 模型(智谱 GLM,走 OpenAI 兼容接口)===
 AI_API_KEY = os.getenv("AI_API_KEY", "")
-AI_BASE_URL = os.getenv("AI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-AI_MODEL = os.getenv("AI_MODEL", "qwen-turbo")
+AI_BASE_URL = os.getenv("AI_BASE_URL", "https://open.bigmodel.cn/api/paas/v4/")
+AI_MODEL = os.getenv("AI_MODEL", "glm-4-flash")
 
 # === 学习参数 ===
 DAILY_NEW_WORDS = 20       # 每天新学单词数

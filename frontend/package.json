@@ -4,22 +4,30 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "build": "next build && npm run build:sw",
+    "build:next": "next build",
+    "build:sw": "serwist build serwist.config.js",
+    "test:ui": "esbuild tests/interaction/toast.test.tsx --bundle --outfile=tests/interaction/.tmp/toast.test.js --format=esm --platform=node --jsx=automatic --alias:@=./src --loader:.css=empty --log-level=warning && node tests/interaction/run.mjs",
     "lint": "eslint"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.3.1",
+    "@radix-ui/react-toast": "^1.3.1",
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@serwist/cli": "^9.5.13",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "jsdom": "^29.1.1",
+    "serwist": "^9.5.13",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -31,7 +31,6 @@ def generate_daily_quiz(db: Session, count: int = 10) -> list[dict]:
     if len(words) < 4:
         return []
 
-    # 随机选 count 个词
     selected = random.sample(words, min(count, len(words)))
     all_words = db.query(Word).all()
 
@@ -101,6 +100,7 @@ def generate_daily_quiz(db: Session, count: int = 10) -> list[dict]:
 def check_answers(db: Session, answers: list[dict]) -> dict:
     """批改测验答案"""
     score = 0
+    unanswered = 0
     wrong_words = []
 
     for ans in answers:
@@ -108,8 +108,15 @@ def check_answers(db: Session, answers: list[dict]) -> dict:
         if not word:
             continue
 
-        user_answer = ans.get("answer", "").strip().lower()
+        user_answer = (ans.get("answer") or "").strip().lower()
         correct = ans.get("correct_answer", "").lower()
+
+        # 未作答：既不判对也不判错，更不回写学习进度。
+        # 必须跳过 submit_study：known=False 会把 know_count 清零、状态退回 learning，
+        # 那样"只答几题就交卷"会不可逆地清掉这些词已积累的连续认识次数。
+        if not user_answer:
+            unanswered += 1
+            continue
 
         if user_answer == correct:
             score += 1
@@ -122,6 +129,7 @@ def check_answers(db: Session, answers: list[dict]) -> dict:
     return {
         "score": score,
         "total": len(answers),
+        "unanswered": unanswered,
         "wrong_words": [
             {
                 "id": w.id,
@@ -132,6 +140,8 @@ def check_answers(db: Session, answers: list[dict]) -> dict:
                 "pos": w.pos,
                 "example": w.example,
                 "example_cn": w.example_cn,
+                "tags": w.tags,
+                "frq": w.frq,
             }
             for w in wrong_words
         ],

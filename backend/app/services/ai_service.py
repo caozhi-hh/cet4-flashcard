@@ -12,6 +12,20 @@ logger = logging.getLogger(__name__)
 client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL) if AI_API_KEY else None
 
 
+def _extract_json(content: str, start_ch: str = "{", end_ch: str = "}"):
+    """从 LLM 输出鲁棒提取 JSON：去 markdown 代码块、截取首个 start_ch 到末个 end_ch。失败返回 None。"""
+    if "```" in content:
+        content = content.replace("```json", "").replace("```", "")
+    start = content.find(start_ch)
+    end = content.rfind(end_ch) + 1
+    if start < 0 or end <= start:
+        return None
+    try:
+        return json.loads(content[start:end])
+    except json.JSONDecodeError:
+        return None
+
+
 async def generate_mnemonic(word: str, definition: str, phonetic: str = "", pos: str = "") -> str:
     """生成记忆口诀"""
     if not client:
@@ -79,13 +93,9 @@ async def generate_wordbook_words(query: str) -> dict:
             temperature=0.6,
             max_tokens=2500,
         )
-        content = response.choices[0].message.content.strip()
-        if "```" in content:
-            content = content.replace("```json", "").replace("```", "").strip()
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start >= 0 and end > start:
-            data = json.loads(content[start:end])
+        content = response.choices[0].message.content
+        data = _extract_json(content)
+        if data:
             words = [str(w).lower().strip() for w in data.get("words", []) if str(w).strip()]
             if words:
                 return {"name": data.get("name", query[:8] + "词书")[:50],
@@ -156,11 +166,10 @@ freq_max：泛主题填4544；若明显是高频基础词填2000
             temperature=0.5,
             max_tokens=500,
         )
-        content = response.choices[0].message.content.strip()
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start >= 0 and end > start:
-            return json.loads(content[start:end])
+        content = response.choices[0].message.content
+        data = _extract_json(content)
+        if data:
+            return data
         logger.error(f"AI 返回无法解析: {content}")
         return {"name": "自定义词书", "description": query[:20], "icon": "✨",
                 "keywords": [query[:4]], "pos": "", "freq_max": 4544}
@@ -198,20 +207,11 @@ async def refine_word_selection(query: str, candidates: list[dict]) -> list[int]
             temperature=0.2,
             max_tokens=2500,
         )
-        content = response.choices[0].message.content.strip()
-        # 鲁棒提取 JSON：去 markdown 代码块、去前后多余文字
-        cleaned = content
-        if "```" in cleaned:
-            # 去掉 ```json 和 ``` 标记行
-            cleaned = cleaned.replace("```json", "").replace("```", "")
-            cleaned = cleaned.strip()
-        start = cleaned.find("{")
-        end = cleaned.rfind("}") + 1
-        if start >= 0 and end > start:
-            data = json.loads(cleaned[start:end])
-            ids = data.get("word_ids", [])
+        content = response.choices[0].message.content
+        data = _extract_json(content)
+        if data:
             result = []
-            for i in ids:
+            for i in data.get("word_ids", []):
                 try:
                     result.append(int(i))
                 except (ValueError, TypeError):
@@ -255,7 +255,6 @@ async def generate_ai_quiz(words: list[dict]) -> list[dict]:
             max_tokens=2000,
         )
         content = response.choices[0].message.content
-        # 提取 JSON
         start = content.find("[")
         end = content.rfind("]") + 1
         if start >= 0 and end > start:

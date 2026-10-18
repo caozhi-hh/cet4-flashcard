@@ -19,7 +19,14 @@ class Word(Base):
     pos = Column(String(20))                       # 词性：n./v./adj. 等
     example = Column(Text)                         # 英文例句
     example_cn = Column(Text)                      # 例句中文翻译
-    frequency = Column(Integer, default=0)         # 词频排序
+    frequency = Column(Integer, default=0)         # 词库内的排序序号（1..N，用于稳定排序）
+
+    # === ECDICT 富化字段（由 scripts/enrich_words_from_ecdict.py 写入 JSON，迁移时回填）===
+    tags = Column(String(100))                     # 考试标签，空格分隔：zk gk cet4 cet6 ky toefl ielts gre
+    frq = Column(Integer)                          # COCA 语料词频序号（越小越高频；None=无数据）
+    bnc = Column(Integer)                          # BNC 语料词频序号（0 表示该语料无排名）
+    collins = Column(Integer)                      # 柯林斯星级 1-5
+    oxford = Column(Integer, default=0)            # 是否收录于牛津核心 3000
 
 
 class StudyRecord(Base):
@@ -32,8 +39,11 @@ class StudyRecord(Base):
     know_count = Column(Integer, default=0)        # 连续「认识」次数
     unknown_count = Column(Integer, default=0)     # 连续「不认识」次数
     review_count = Column(Integer, default=0)      # 总复习次数
-    next_review_at = Column(String(30))            # 下次复习时间 ISO 8601
+    next_review_at = Column(String(30))            # 下次复习时间 ISO 8601（复习队列按此筛选）
     last_studied_at = Column(String(30))           # 上次学习时间
+    # FSRS 卡片状态（py-fsrs 的 JSON 序列化：state/step/stability/difficulty/due/last_review）
+    # 历史记录由 migrations.ensure_fsrs_schema 回填，回填时保留原有 next_review_at
+    fsrs_card = Column(Text)
     created_at = Column(String(30), default=lambda: datetime.now(timezone.utc).isoformat())
 
 
