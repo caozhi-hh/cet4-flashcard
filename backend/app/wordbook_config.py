@@ -129,25 +129,34 @@ def apply_custom_filter(query, Word, keywords: list[str], pos: str = "", freq_ma
     return query
 
 
-def apply_wordbook(query, Word, wordbook_id: str | None, db) -> "Query":
+def apply_wordbook(query, Word, wordbook_id: str | None, db, user_id: int | None = None) -> "Query":
     """统一应用词书过滤（预定义或自定义），返回过滤后的 query。
 
     - wordbook_id 为 None 或空 → 用默认书
-    - custom_ 前缀 → 优先用 AI 精选的 word_ids；无则 fallback 到关键词过滤
-    - 其他 → 预定义书
+    - custom_ 前缀 → **只允许当前用户自己的自定义书**；不存在或不属于自己时返回空集，
+      绝不因为"查不到"而退化成不过滤（那等于把整个词库当成了别人的私有书内容）
+    - 预定义书是公共数据，与 user_id 无关
     """
     import json as _json
+
+    from sqlalchemy import false
+
     wb_id = wordbook_id or DEFAULT_WORDBOOK
 
     if wb_id.startswith("custom_"):
         from .models import CustomWordbook
+
         try:
             cid = int(wb_id[7:])
         except ValueError:
-            return query
-        wb = db.query(CustomWordbook).filter(CustomWordbook.id == cid).first()
+            return query.filter(false())
+        wb = (
+            db.query(CustomWordbook)
+            .filter(CustomWordbook.id == cid, CustomWordbook.user_id == user_id)
+            .first()
+        )
         if not wb:
-            return query
+            return query.filter(false())
         # 优先用 AI 精选的 word_ids
         word_ids = _json.loads(wb.word_ids) if wb.word_ids else None
         if word_ids:

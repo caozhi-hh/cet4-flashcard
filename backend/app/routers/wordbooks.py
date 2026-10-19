@@ -1,4 +1,10 @@
-"""单词书路由 — 预定义 + AI 自定义"""
+"""单词书路由 — 预定义（公共）+ AI 自定义（按用户隔离）
+
+访问控制：
+    - 预定义词书是公共数据，未登录也能查（前端未登录时只展示这些）；
+    - 自定义词书只能由**创建它的用户**列出、查看、删除；
+      查询别人（或不存在）的 custom_id 一律 404，不泄露是否存在。
+"""
 
 import json
 
@@ -6,8 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from ..auth import current_user_optional, require_user
 from ..database import get_db
-from ..models import CustomWordbook, Word
+from ..models import CustomWordbook, User, Word
 from ..services.ai_service import generate_wordbook_config, generate_wordbook_words, refine_word_selection
 from ..wordbook_config import WORDBOOK_DEFS, apply_custom_filter, get_preset_filter
 
@@ -41,11 +48,31 @@ def _custom_to_dict(db: Session, wb: CustomWordbook) -> dict:
     }
 
 
+def _get_owned_custom(db: Session, wordbook_id: str, user: User | None) -> CustomWordbook:
+    """取出属于当前用户的自定义词书；不存在/不属于自己/未登录都按 404 处理"""
+    try:
+        cid = int(wordbook_id[7:])
+    except ValueError:
+        raise HTTPException(status_code=404, detail="单词书不存在")
+    if user is None:
+        raise HTTPException(status_code=404, detail="单词书不存在")
+    wb = (
+        db.query(CustomWordbook)
+        .filter(CustomWordbook.id == cid, CustomWordbook.user_id == user.id)
+        .first()
+    )
+    if not wb:
+        raise HTTPException(status_code=404, detail="单词书不存在")
+    return wb
+
+
 @router.get("")
-def list_wordbooks(db: Session = Depends(get_db)):
-    """获取所有单词书（预定义 + 自定义）"""
+def list_wordbooks(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(current_user_optional),
+):
+    """获取单词书列表：预定义（公共）+ 当前用户的自定义书"""
     result = []
-    # 预定义
     for wb_id, name, desc, icon, color, filter_fn in WORDBOOK_DEFS:
         count = filter_fn(db.query(Word), Word).count()
         result.append({
@@ -57,22 +84,29 @@ def list_wordbooks(db: Session = Depends(get_db)):
             "word_count": count,
             "is_custom": False,
         })
-    # 自定义（AI 生成）
-    customs = db.query(CustomWordbook).order_by(CustomWordbook.id.desc()).all()
-    for wb in customs:
-        result.append(_custom_to_dict(db, wb))
+
+    if user is not None:
+        customs = (
+            db.query(CustomWordbook)
+            .filter(CustomWordbook.user_id == user.id)
+            .order_by(CustomWordbook.id.desc())
+            .all()
+        )
+        for wb in customs:
+            result.append(_custom_to_dict(db, wb))
     return result
 
 
 @router.get("/{wordbook_id}")
-def get_wordbook(wordbook_id: str, db: Session = Depends(get_db)):
-    """获取单个单词书详情"""
+def get_wordbook(
+    wordbook_id: str,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(current_user_optional),
+):
+    """获取单个单词书详情（自定义书仅限本人）"""
     if wordbook_id.startswith("custom_"):
-        cid = int(wordbook_id[7:])
-        wb = db.query(CustomWordbook).filter(CustomWordbook.id == cid).first()
-        if not wb:
-            raise HTTPException(status_code=404, detail="单词书不存在")
-        return _custom_to_dict(db, wb)
+        return _custom_to_dict(db, _get_owned_custom(db, wordbook_id, user))
+
     filter_fn = get_preset_filter(wordbook_id)
     if filter_fn is None:
         raise HTTPException(status_code=404, detail="单词书不存在")
@@ -89,8 +123,12 @@ class AIGenerateIn(BaseModel):
 
 
 @router.post("/ai-generate")
-async def ai_generate(req: AIGenerateIn, db: Session = Depends(get_db)):
-    """AI 根据需求直接生成主题单词书
+async def ai_generate(
+    req: AIGenerateIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """AI 根据需求直接生成主题单词书（归属当前用户）
 
     流程：AI 直接列出主题相关四级词 → 匹配词库 → 存 word_ids
     （若 AI 列词为空，fallback 到粗筛+精选两阶段）
@@ -132,7 +170,7 @@ async def ai_generate(req: AIGenerateIn, db: Session = Depends(get_db)):
         keywords_str = json.dumps(ai_words[:15], ensure_ascii=False)
         freq_max = 4544
 
-    # 入库
+    # 入库（带 user_id，之后只有本人能看到）
     wb = CustomWordbook(
         name=name[:50],
         description=f"AI 智能生成 · {query[:25]}",
@@ -142,6 +180,7 @@ async def ai_generate(req: AIGenerateIn, db: Session = Depends(get_db)):
         word_ids=json.dumps(word_ids),
         pos="",
         freq_max=freq_max,
+        user_id=user.id,
     )
     db.add(wb)
     db.commit()
@@ -151,14 +190,15 @@ async def ai_generate(req: AIGenerateIn, db: Session = Depends(get_db)):
 
 
 @router.delete("/{wordbook_id}")
-def delete_wordbook(wordbook_id: str, db: Session = Depends(get_db)):
-    """删除自定义单词书（预定义书不可删）"""
+def delete_wordbook(
+    wordbook_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """删除自定义单词书（预定义书不可删；只能删自己的）"""
     if not wordbook_id.startswith("custom_"):
         raise HTTPException(status_code=400, detail="预定义单词书不可删除")
-    cid = int(wordbook_id[7:])
-    wb = db.query(CustomWordbook).filter(CustomWordbook.id == cid).first()
-    if not wb:
-        raise HTTPException(status_code=404, detail="单词书不存在")
+    wb = _get_owned_custom(db, wordbook_id, user)
     db.delete(wb)
     db.commit()
     return {"message": "已删除"}

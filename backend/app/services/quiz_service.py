@@ -7,12 +7,19 @@ from sqlalchemy.orm import Session
 from ..models import StudyRecord, Word
 
 
-def generate_daily_quiz(db: Session, count: int = 10) -> list[dict]:
-    """生成每日测验（混合选择题和填空题）"""
+def generate_daily_quiz(db: Session, user_id: int, count: int = 10) -> list[dict]:
+    """生成每日测验（混合选择题和填空题）
+
+    只从**当前用户**最近学过的词里选题；该用户还没有学习记录时，
+    退化为从公共词库取词（词库是共享数据，不涉及隐私）。
+    """
     # 从最近学过的词中选题
     records = (
         db.query(StudyRecord)
-        .filter(StudyRecord.status.in_(["learning", "new"]))
+        .filter(
+            StudyRecord.user_id == user_id,
+            StudyRecord.status.in_(["learning", "new"]),
+        )
         .order_by(StudyRecord.last_studied_at.desc())
         .limit(30)
         .all()
@@ -97,8 +104,8 @@ def generate_daily_quiz(db: Session, count: int = 10) -> list[dict]:
     return questions
 
 
-def check_answers(db: Session, answers: list[dict]) -> dict:
-    """批改测验答案"""
+def check_answers(db: Session, user_id: int, answers: list[dict]) -> dict:
+    """批改测验答案（错题只回写**该用户自己**的学习进度）"""
     score = 0
     unanswered = 0
     wrong_words = []
@@ -122,9 +129,10 @@ def check_answers(db: Session, answers: list[dict]) -> dict:
             score += 1
         else:
             wrong_words.append(word)
-            # 错题标记为不认识
+            # 错题标记为不认识（限定当前用户）
             from .study_service import submit_study
-            submit_study(db, word.id, known=False)
+
+            submit_study(db, user_id, word.id, known=False)
 
     return {
         "score": score,

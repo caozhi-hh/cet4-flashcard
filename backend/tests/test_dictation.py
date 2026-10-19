@@ -16,6 +16,9 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+TESTS_DIR = Path(__file__).resolve().parent
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
 
 TMP_DIR = BACKEND_DIR / "tests" / ".tmp-dictation"
 if TMP_DIR.exists():
@@ -43,7 +46,9 @@ atexit.register(_cleanup)
 with TestClient(app) as _boot:
     _boot.get("/api/health")
 
-client = TestClient(app)
+from testkit import AuthClient  # noqa: E402  引入 Cookie 会话后默认以登录用户运行
+
+client = AuthClient(app)  # 写请求自动带 CSRF 头
 
 
 def _word_id(offset: int = 0) -> int:

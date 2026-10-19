@@ -24,6 +24,9 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+TESTS_DIR = Path(__file__).resolve().parent
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
 
 TMP_DIR = BACKEND_DIR / "tests" / ".tmp-fsrs"
 if TMP_DIR.exists():
@@ -52,7 +55,9 @@ atexit.register(_cleanup)
 with TestClient(app) as _boot:
     _boot.get("/api/health")
 
-client = TestClient(app)
+from testkit import AuthClient  # noqa: E402  引入 Cookie 会话后默认以登录用户运行
+
+client = AuthClient(app)  # 写请求自动带 CSRF 头
 
 REAL_DB = Path(r"D:\data\cet4.db")
 
@@ -177,17 +182,19 @@ def test_review_queue_respects_due_date():
     now = datetime.now(timezone.utc)
     due_word = _word_id(40)
     future_word = _word_id(41)
+    # 必须写 user_id：归属为 NULL 的行属于"多用户改造前的遗留数据"，对任何用户都不可见
+    uid = client.get("/api/auth/me").json()["id"]
 
     con = sqlite3.connect(str(config.DB_PATH))
     con.execute(
-        "insert into study_records (word_id, status, know_count, unknown_count, review_count, next_review_at) "
-        "values (?,?,?,?,?,?)",
-        (due_word, "known", 5, 0, 5, (now - timedelta(days=1)).isoformat()),
+        "insert into study_records (word_id, user_id, status, know_count, unknown_count, review_count, next_review_at) "
+        "values (?,?,?,?,?,?,?)",
+        (due_word, uid, "known", 5, 0, 5, (now - timedelta(days=1)).isoformat()),
     )
     con.execute(
-        "insert into study_records (word_id, status, know_count, unknown_count, review_count, next_review_at) "
-        "values (?,?,?,?,?,?)",
-        (future_word, "known", 5, 0, 5, (now + timedelta(days=30)).isoformat()),
+        "insert into study_records (word_id, user_id, status, know_count, unknown_count, review_count, next_review_at) "
+        "values (?,?,?,?,?,?,?)",
+        (future_word, uid, "known", 5, 0, 5, (now + timedelta(days=30)).isoformat()),
     )
     con.commit()
     con.close()
