@@ -250,3 +250,42 @@ def ensure_user_scope_schema(engine: Engine, backup_dir: Path | None = None) -> 
         "daily_stats_rows": rows,
         "backed_up": backed_up,
     }
+
+
+STUDY_PLAN_TABLE = "study_plans"
+
+
+def ensure_study_plan_schema(engine: Engine, backup_dir: Path | None = None) -> dict:
+    """确保 study_plans 表存在（学习计划功能）
+
+    只**新建一张表**：不碰任何已有表、不增删任何行，因此不存在历史数据被改动或
+    被分配给其他用户的风险。建表前先备份（沿用备份优先原则）。
+    幂等：表已存在（含全新库由 create_all 建好的情况）直接返回。
+
+    返回 {"created_table": bool, "backed_up": str | None}
+    """
+    if _table_columns(engine, STUDY_PLAN_TABLE):
+        return {"created_table": False, "backed_up": None}
+
+    backed_up = _backup_once(engine, backup_dir)
+    with engine.begin() as conn:
+        conn.execute(text(
+            f"""
+            CREATE TABLE {STUDY_PLAN_TABLE} (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                goal_type VARCHAR(32) NOT NULL,
+                wordbook_key VARCHAR(64) NOT NULL,
+                target_date VARCHAR(10),
+                daily_new_words INTEGER NOT NULL DEFAULT 20,
+                created_at VARCHAR(30),
+                updated_at VARCHAR(30)
+            )
+            """
+        ))
+        # 与 ORM（user_id: unique=True, index=True）一致：唯一索引，保证每个用户只有一份生效计划
+        conn.execute(text(
+            f"CREATE UNIQUE INDEX ix_{STUDY_PLAN_TABLE}_user_id ON {STUDY_PLAN_TABLE} (user_id)"
+        ))
+    logger.info(f"{STUDY_PLAN_TABLE} 表已创建（备份：{backed_up}）")
+    return {"created_table": True, "backed_up": backed_up}

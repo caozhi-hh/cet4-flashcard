@@ -169,7 +169,7 @@ export default function HomePage() {
         >
           开始今日学习
         </Link>
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-2 gap-2.5">
           <Link
             href="/wordbooks"
             className="block py-3.5 bg-milk text-center rounded-xl font-medium text-cocoa border border-honey hover:border-cocoa-soft transition-colors active:scale-[0.98]"
@@ -188,6 +188,12 @@ export default function HomePage() {
             className="block py-3.5 bg-milk text-center rounded-xl font-semibold text-cocoa border border-honey hover:border-cocoa-soft transition-colors active:scale-[0.98]"
           >
             复习
+          </Link>
+          <Link
+            href="/plan"
+            className="block py-3.5 bg-milk text-center rounded-xl font-semibold text-cocoa border border-honey hover:border-cocoa-soft transition-colors active:scale-[0.98]"
+          >
+            学习计划
           </Link>
         </div>
       </div>

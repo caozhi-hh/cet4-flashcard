@@ -108,6 +108,28 @@ export const authApi = {
   logout: () => request<{ message: string }>("/api/auth/logout", { method: "POST" }),
 };
 
+/** 学习计划 */
+export const planApi = {
+  /** 可选学习目标（含各自默认词书）与每日新词量范围 */
+  options: () =>
+    request<{ goals: GoalOption[]; daily_new_words_range: { min: number; max: number } }>(
+      "/api/plan/options"
+    ),
+  /** 当前用户的计划；未设置时 has_plan=false */
+  get: () => request<{ has_plan: boolean; plan: StudyPlan | null }>("/api/plan"),
+  save: (payload: {
+    goal_type: string;
+    wordbook_key: string | null;
+    target_date: string | null;
+    daily_new_words: number;
+  }) =>
+    request<{ has_plan: boolean; plan: StudyPlan }>("/api/plan", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  forecast: () => request<PlanForecast>("/api/plan/forecast"),
+};
+
 /** 学习 */
 export const studyApi = {
   getToday: (wordbook?: string, limit?: number) => {
@@ -190,4 +212,4 @@ export const starredApi = {
 };
 
 /** 类型导入 */
-import type { AuthUser, FlashCard, StudyResponse, Rating, RatingPreview, QuizQuestion, QuizResult, ProgressOverview, DailyProgress, Wordbook, StarredWord } from "./types";
+import type { AuthUser, FlashCard, StudyResponse, Rating, RatingPreview, QuizQuestion, QuizResult, ProgressOverview, DailyProgress, Wordbook, StarredWord, GoalOption, StudyPlan, PlanForecast } from "./types";

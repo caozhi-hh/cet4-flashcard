@@ -13,6 +13,7 @@ import { createRoot } from "react-dom/client";
 import FlashCard from "@/components/FlashCard";
 import StudyPage from "@/app/study/page";
 import LoginPage from "@/app/login/page";
+import PlanPage from "@/app/plan/page";
 import AuthGate from "@/components/AuthGate";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ToastProvider } from "@/components/ui/toast";
@@ -419,6 +420,93 @@ async function main() {
   );
   await act(async () => csrfRoot.unmount());
   document.cookie = "cet4_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+
+  // === 用例 13：学习计划页 —— 选目标/词书后保存，载荷正确且同步本机设置 ===
+  let savedBody: any = null;
+  const BOOKS = [
+    { id: "exam_cet4", name: "四级考纲标注词", word_count: 3394, is_custom: false },
+    { id: "exam_cet6", name: "六级拓展词", word_count: 3290, is_custom: false },
+  ];
+  const GOALS = [
+    { goal_type: "cet4", name: "四级 CET-4", description: "大学英语四级", default_wordbook: "exam_cet4" },
+    { goal_type: "cet6", name: "六级 CET-6", description: "大学英语六级", default_wordbook: "exam_cet6" },
+  ];
+  (globalThis as any).fetch = async (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url.includes("/api/plan/options"))
+      return json({ goals: GOALS, daily_new_words_range: { min: 1, max: 200 } });
+    if (url.includes("/api/wordbooks")) return json(BOOKS);
+    if (url.includes("/api/plan/forecast"))
+      return json({
+        has_plan: true,
+        plan: null,
+        wordbook: { key: "exam_cet6", name: "六级拓展词", total_words: 3290 },
+        learned_words: 10,
+        remaining_new_words: 3280,
+        days_to_finish: 164,
+        estimated_finish_date: "2027-04-01",
+        target: null,
+        due: {
+          overdue: 0,
+          today: 2,
+          next_7_days: [{ date: "2026-10-19", count: 2 }],
+          total_pending: 2,
+          scope: "wordbook",
+          as_of: "2026-10-19T00:00:00+00:00",
+        },
+        estimate_note: "估算不是保证",
+        generated_at: "2026-10-19T00:00:00+00:00",
+      });
+    if (url.includes("/api/plan") && method === "PUT") {
+      savedBody = JSON.parse(init.body);
+      return json({ has_plan: true, plan: { ...savedBody, goal_name: "六级 CET-6", created_at: null, updated_at: null } });
+    }
+    if (url.includes("/api/plan")) return json({ has_plan: false, plan: null });
+    return json({});
+  };
+
+  localStorage.removeItem("cet4_wordbook_id");
+  const planHost = document.createElement("div");
+  document.body.appendChild(planHost);
+  const planRoot = createRoot(planHost);
+  await act(async () => {
+    planRoot.render(
+      <ToastProvider>
+        <PlanPage />
+      </ToastProvider>
+    );
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  const planText = () => (planHost.textContent || "").replace(/\s+/g, " ");
+  check("计划页渲染学习目标", planText().includes("四级 CET-4") && planText().includes("六级 CET-6"), planText().slice(0, 80));
+  check("计划页提示沿用了本机设置", planText().includes("本机原有的设置"), "");
+  check("预测面板显示剩余新词与预计天数", planText().includes("3280") && planText().includes("164 天"), planText().slice(-90));
+
+  const goalButtons = [...planHost.querySelectorAll("button[aria-pressed]")].filter((b) =>
+    (b.textContent || "").includes("六级")
+  );
+  check("找到六级目标按钮", goalButtons.length === 1, String(goalButtons.length));
+  if (goalButtons[0]) await click(goalButtons[0]);
+
+  // 切目标后，词书应跟着换到该目标的默认词书
+  const select = planHost.querySelector("select") as HTMLSelectElement;
+  check("切目标后词书跟随默认值", select?.value === "exam_cet6", select?.value ?? "无 select");
+
+  const saveBtn = [...planHost.querySelectorAll("button")].find((b) =>
+    (b.textContent || "").includes("保存计划")
+  );
+  if (saveBtn) await click(saveBtn);
+  check("保存请求载荷正确", savedBody?.goal_type === "cet6" && savedBody?.wordbook_key === "exam_cet6", JSON.stringify(savedBody));
+  check("保存后同步本机词书（学习页跟随计划）", localStorage.getItem("cet4_wordbook_id") === "exam_cet6", String(localStorage.getItem("cet4_wordbook_id")));
+  check("保存后提示已保存", planText().includes("计划已保存"), planText().slice(0, 60));
+  await act(async () => planRoot.unmount());
+  planHost.remove();
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);

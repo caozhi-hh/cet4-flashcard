@@ -14,10 +14,11 @@ from .auth import csrf_middleware
 from .migrations import (
     FSRS_COLUMN,
     ensure_fsrs_schema,
+    ensure_study_plan_schema,
     ensure_user_scope_schema,
     ensure_word_enrichment_schema,
 )
-from .routers import ai, auth, progress, quiz, starred, study, wordbooks, words
+from .routers import ai, auth, plan, progress, quiz, starred, study, wordbooks, words
 from .services.word_service import backfill_word_enrichment, init_words
 from .database import SessionLocal
 
@@ -56,6 +57,10 @@ async def lifespan(app: FastAPI):
             f"daily_stats 重建={scoped['daily_stats_rebuilt']}（保留 {scoped['daily_stats_rows']} 行），"
             f"备份：{scoped['backed_up']}"
         )
+    # 学习计划表：只新建一张表，不动任何已有表与数据
+    plan_schema = ensure_study_plan_schema(engine)
+    if plan_schema["created_table"]:
+        logger.info(f"已创建 study_plans 表（备份：{plan_schema['backed_up']}）")
     db = SessionLocal()
     try:
         count = init_words(db)
@@ -88,6 +93,7 @@ app.add_middleware(
 
 # 注册 API 路由（必须先注册，优先于下面的 SPA 兜底）
 app.include_router(auth.router)
+app.include_router(plan.router)
 app.include_router(words.router)
 app.include_router(wordbooks.router)
 app.include_router(study.router)

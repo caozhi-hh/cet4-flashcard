@@ -123,6 +123,25 @@ class CustomWordbook(Base):
     created_at = Column(String(30), default=lambda: datetime.now(timezone.utc).isoformat())
 
 
+class StudyPlan(Base):
+    """用户级学习计划
+
+    MVP：每个用户一份"当前生效"的计划（user_id 唯一）。
+    字段本身是可扩展的——goal_type 决定默认词书，wordbook_key 指向现有词书体系
+    （预定义书 id，或本人的 custom_<id>），以后要支持多计划/多语言只需放宽唯一约束。
+    """
+    __tablename__ = "study_plans"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, unique=True, index=True)
+    goal_type = Column(String(32), nullable=False)          # cet4 / cet6 / kaoyan / ielts / toefl / general
+    wordbook_key = Column(String(64), nullable=False)       # 现有词书体系的 id（含 custom_<id>）
+    target_date = Column(String(10))                        # YYYY-MM-DD，可空（不设目标日期）
+    daily_new_words = Column(Integer, nullable=False, default=20)
+    created_at = Column(String(30), default=_now_iso)
+    updated_at = Column(String(30), default=_now_iso)
+
+
 class StarredWord(Base):
     """生词本/错题本 — 收藏的难点词和测验错的词"""
     __tablename__ = "starred_words"
