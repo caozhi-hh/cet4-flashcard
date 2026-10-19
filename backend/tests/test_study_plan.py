@@ -374,6 +374,35 @@ def _snapshot(db: Path) -> dict:
     return {"counts": counts, "has_table": "study_plans" in tables, "cols": cols}
 
 
+def test_daily_new_words_range_is_not_narrowed_to_presets():
+    """合法范围 1-200 必须真的可用
+
+    防止"为了对齐前端"把后端范围悄悄收窄成 10/20/30/50——那样前端一致了，
+    但接口能力被削弱，属于用掩盖代替修复。
+    """
+    c = AuthClient(app)
+    for n in (1, 25, 200):
+        res = c.put(
+            "/api/plan",
+            json={"goal_type": "cet4", "wordbook_key": "exam_cet4", "daily_new_words": n},
+        )
+        assert res.status_code == 200, f"{n} 应被接受：{res.text[:120]}"
+        assert res.json()["plan"]["daily_new_words"] == n
+        assert c.get("/api/plan").json()["plan"]["daily_new_words"] == n, f"{n} 没有正确往返"
+
+        forecast = c.get("/api/plan/forecast").json()
+        assert forecast["days_to_finish"] == -(-forecast["remaining_new_words"] // n), (
+            f"每日 {n} 时预计天数应随之变化"
+        )
+
+    for n in (0, -1, 201):
+        res = c.put(
+            "/api/plan",
+            json={"goal_type": "cet4", "wordbook_key": "exam_cet4", "daily_new_words": n},
+        )
+        assert res.status_code == 422, f"{n} 应被拒绝，实际 {res.status_code}"
+
+
 def test_migration_creates_table_idempotently_with_backup():
     from sqlalchemy import create_engine
 

@@ -7,7 +7,7 @@ import Confetti from "@/components/Confetti";
 import { studyApi } from "@/lib/api";
 import type { FlashCard as FlashCardType, Rating } from "@/lib/types";
 import { getSelectedWordbook } from "@/lib/wordbook";
-import { getDailyGoal } from "@/lib/settings";
+import { getDailyGoal, onGoalChange } from "@/lib/settings";
 
 export default function StudyPage() {
   const [cards, setCards] = useState<FlashCardType[]>([]);
@@ -37,6 +37,19 @@ export default function StudyPage() {
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // 每日新词量以服务端计划为权威：同步完成或用户在计划页/首页改动后会广播变化。
+  // 只在"还没开始学"时重取，避免打断正在进行的这一轮（已发出的评分不会丢）。
+  const indexRef = useRef(0);
+  useEffect(() => {
+    indexRef.current = index;
+  }, [index]);
+  useEffect(() => {
+    const unsub = onGoalChange(() => {
+      if (indexRef.current === 0) load();
+    });
+    return unsub;
   }, [load]);
 
   const handleSubmit = async (rating: Rating) => {

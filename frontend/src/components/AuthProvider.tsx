@@ -9,6 +9,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ApiError, UNAUTHORIZED_EVENT, authApi } from "@/lib/api";
+import { resetPlanCache, syncPlanGoal } from "@/lib/planGoal";
 import type { AuthUser } from "@/lib/types";
 
 interface AuthContextValue {
@@ -75,6 +76,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // 会话确定后把服务端的每日新词量同步到本机缓存（已登录用户以服务端为权威），
+  // 这样学习页/首页的同步读取能立刻拿到正确数量；退出或被拒时清掉上一个用户的缓存。
+  useEffect(() => {
+    if (loading) return;
+    if (!user) {
+      resetPlanCache();
+      return;
+    }
+    void syncPlanGoal();
+  }, [loading, user]);
 
   const value = useMemo(
     () => ({ user, loading, refresh, login, register, logout }),

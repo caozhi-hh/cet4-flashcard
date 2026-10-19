@@ -15,7 +15,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { planApi, wordbookApi } from "@/lib/api";
 import type { GoalOption, PlanForecast, Wordbook } from "@/lib/types";
-import { GOAL_OPTIONS, getDailyGoal, setDailyGoal } from "@/lib/settings";
+import { GOAL_OPTIONS, getDailyGoal, isValidDailyGoal, setDailyGoal, MIN_DAILY_GOAL, MAX_DAILY_GOAL } from "@/lib/settings";
+import { setCachedPlan } from "@/lib/planGoal";
 import { getSelectedWordbook, setSelectedWordbook } from "@/lib/wordbook";
 
 interface FormState {
@@ -101,9 +102,14 @@ export default function PlanPage() {
 
   const handleSave = async () => {
     if (saving) return;
-    setSaving(true);
     setError(null);
     setSaved(false);
+    // 先本地卡范围：非法值不必白跑一次请求，也避免按钮卡在"保存中"
+    if (!isValidDailyGoal(form.daily_new_words)) {
+      setError(`每日新词量需在 ${MIN_DAILY_GOAL}-${MAX_DAILY_GOAL} 之间`);
+      return;
+    }
+    setSaving(true);
     try {
       const res = await planApi.save({
         goal_type: form.goal_type,
@@ -114,6 +120,8 @@ export default function PlanPage() {
       // 明确保存后才同步本机设置，避免静默覆盖用户原有选择
       setDailyGoal(res.plan.daily_new_words);
       setSelectedWordbook(res.plan.wordbook_key);
+      // 让首页的快捷按钮知道"已有服务端计划"，写入时不至于只改本机
+      setCachedPlan(res.plan);
       setDraftFromLocal(false);
       setSaved(true);
       await loadForecast();
@@ -235,6 +243,32 @@ export default function PlanPage() {
                 {n}
               </button>
             ))}
+          </div>
+          {/* 上面只是快捷选项；接口允许 1-200，这里让任意值也能从界面设置，
+              否则"计划里存 25"就只能靠调 API，界面与接口的有效范围不一致 */}
+          <div className="flex items-center gap-2 pt-1">
+            <label className="text-xs text-cocoa-soft" htmlFor="daily-new-words">
+              自定义
+            </label>
+            <input
+              id="daily-new-words"
+              type="number"
+              min={MIN_DAILY_GOAL}
+              max={MAX_DAILY_GOAL}
+              value={form.daily_new_words}
+              onChange={(e) => {
+                setSaved(false);
+                const v = Number(e.target.value);
+                setForm((prev) => ({
+                  ...prev,
+                  daily_new_words: Number.isFinite(v) ? Math.trunc(v) : 0,
+                }));
+              }}
+              className="w-20 p-2 rounded-lg bg-cream text-cocoa border-2 border-honey focus:border-cocoa focus:outline-none text-sm tabular-nums"
+            />
+            <span className="text-xs text-cocoa-soft">
+              词（{MIN_DAILY_GOAL}-{MAX_DAILY_GOAL}）
+            </span>
           </div>
         </div>
 

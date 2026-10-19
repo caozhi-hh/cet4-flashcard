@@ -14,6 +14,7 @@ import FlashCard from "@/components/FlashCard";
 import StudyPage from "@/app/study/page";
 import LoginPage from "@/app/login/page";
 import PlanPage from "@/app/plan/page";
+import HomePage from "@/app/page";
 import AuthGate from "@/components/AuthGate";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ToastProvider } from "@/components/ui/toast";
@@ -505,8 +506,130 @@ async function main() {
   check("保存请求载荷正确", savedBody?.goal_type === "cet6" && savedBody?.wordbook_key === "exam_cet6", JSON.stringify(savedBody));
   check("保存后同步本机词书（学习页跟随计划）", localStorage.getItem("cet4_wordbook_id") === "exam_cet6", String(localStorage.getItem("cet4_wordbook_id")));
   check("保存后提示已保存", planText().includes("计划已保存"), planText().slice(0, 60));
+
+  // 关键验收：计划设成 25（非快捷选项）后，学习页必须按 25 取词 —— 两处数字必须一致
+  const customInput = planHost.querySelector("#daily-new-words") as HTMLInputElement;
+  check("计划页提供自定义数量输入", !!customInput, "");
+  if (customInput) await setInput(customInput, "25");
+  const saveBtn2 = [...planHost.querySelectorAll("button")].find((b) =>
+    (b.textContent || "").includes("保存计划")
+  );
+  if (saveBtn2) await click(saveBtn2);
+  check("自定义 25 写入服务端载荷", savedBody?.daily_new_words === 25, JSON.stringify(savedBody));
+  check(
+    "本机缓存同步为 25（不再被选项白名单丢弃）",
+    localStorage.getItem("cet4_daily_goal") === "25",
+    String(localStorage.getItem("cet4_daily_goal"))
+  );
   await act(async () => planRoot.unmount());
   planHost.remove();
+
+  let studyUrl = "";
+  (globalThis as any).fetch = async (input: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (url.includes("/api/study/today")) {
+      studyUrl = url;
+      return json({ type: "new", words: [], total: 0 });
+    }
+    return json({});
+  };
+  const planStudyHost = document.createElement("div");
+  document.body.appendChild(planStudyHost);
+  const planStudyRoot = createRoot(planStudyHost);
+  await act(async () => {
+    planStudyRoot.render(
+      <ToastProvider>
+        <StudyPage />
+      </ToastProvider>
+    );
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  check("学习页按计划里的 25 取词", studyUrl.includes("limit=25"), studyUrl);
+  await act(async () => planStudyRoot.unmount());
+  planStudyHost.remove();
+
+  // === 用例 14：首页快捷按钮也要写回服务端（否则又是两处数字不一致）===
+  const PLAN = {
+    goal_type: "cet6",
+    goal_name: "六级 CET-6",
+    wordbook_key: "exam_cet6",
+    target_date: "2027-01-01",
+    daily_new_words: 20,
+    created_at: null,
+    updated_at: null,
+  };
+  let homeSaved: any = null;
+  let homeSaveFails = false;
+  (globalThis as any).fetch = async (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url.includes("/api/auth/me")) return json({ id: 1, email: "a@b.com", created_at: null });
+    if (url.includes("/api/progress/overview"))
+      return json({ total_words: 100, learned_words: 5, known_words: 1, today_new: 2, today_reviewed: 0, streak_days: 3 });
+    if (url.includes("/api/wordbooks"))
+      return json({ id: "exam_cet6", name: "六级拓展词", word_count: 3290, is_custom: false });
+    if (url.includes("/api/plan") && method === "PUT") {
+      if (homeSaveFails) return json({ detail: "服务器开小差了" }, 500);
+      homeSaved = JSON.parse(init.body);
+      return json({ has_plan: true, plan: { ...PLAN, ...homeSaved } });
+    }
+    if (url.includes("/api/plan")) return json({ has_plan: true, plan: PLAN });
+    return json({});
+  };
+
+  localStorage.setItem("cet4_daily_goal", "20");
+  const homeHost = document.createElement("div");
+  document.body.appendChild(homeHost);
+  const homeRoot = createRoot(homeHost);
+  await act(async () => {
+    homeRoot.render(
+      <ToastProvider>
+        <AuthProvider>
+          <HomePage />
+        </AuthProvider>
+      </ToastProvider>
+    );
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  const goalBtn = (label: string) =>
+    [...homeHost.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === label);
+  const btn50 = goalBtn("50");
+  check("首页有 50 快捷按钮", !!btn50, "");
+  if (btn50) await click(btn50);
+  check(
+    "首页改数量写回服务端并保留其他字段",
+    homeSaved?.daily_new_words === 50 &&
+      homeSaved?.goal_type === "cet6" &&
+      homeSaved?.wordbook_key === "exam_cet6" &&
+      homeSaved?.target_date === "2027-01-01",
+    JSON.stringify(homeSaved)
+  );
+  check("首页本机缓存同步为 50", localStorage.getItem("cet4_daily_goal") === "50", String(localStorage.getItem("cet4_daily_goal")));
+
+  // 服务端失败：必须明确报错，且不能把新值当成已保存
+  homeSaveFails = true;
+  const btn30 = goalBtn("30");
+  if (btn30) await click(btn30);
+  check(
+    "保存失败时显示错误",
+    (homeHost.textContent || "").includes("服务器开小差了"),
+    (homeHost.textContent || "").replace(/\s+/g, " ").slice(-70)
+  );
+  check(
+    "保存失败时数值未被改动（没伪装成已保存）",
+    localStorage.getItem("cet4_daily_goal") === "50",
+    String(localStorage.getItem("cet4_daily_goal"))
+  );
+  await act(async () => homeRoot.unmount());
+  homeHost.remove();
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
