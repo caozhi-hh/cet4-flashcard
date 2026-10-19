@@ -3,6 +3,8 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import { ToastProvider } from "@/components/ui/toast";
+import { AuthProvider } from "@/components/AuthProvider";
+import AuthGate from "@/components/AuthGate";
 
 export const metadata: Metadata = {
   title: "腰子背单词 🌰",
@@ -57,11 +59,16 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <ToastProvider>
-          <ServiceWorkerRegistrar />
-          <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 pb-24 md:pb-8">
-            {children}
-          </main>
-          <Navbar />
+          <AuthProvider>
+            <ServiceWorkerRegistrar />
+            {/* AuthGate 负责"未登录时引导登录"；真正的权限判断在后端 */}
+            <AuthGate>
+              <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 pb-24 md:pb-8">
+                {children}
+              </main>
+              <Navbar />
+            </AuthGate>
+          </AuthProvider>
         </ToastProvider>
       </body>
     </html>

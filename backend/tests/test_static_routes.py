@@ -30,10 +30,10 @@ STATIC_DIR = BACKEND_DIR / "static"
 client = TestClient(app)
 
 # 需要"直达也能打开"的页面路由
-PAGE_ROUTES = ["/study", "/review", "/dictation", "/quiz", "/progress", "/wordbooks", "/starred"]
+PAGE_ROUTES = ["/login", "/study", "/review", "/dictation", "/quiz", "/progress", "/wordbooks", "/starred"]
 
 # Service Worker 里要预缓存的页面路由（含首页），必须与 frontend/src/sw.ts 的 PAGE_ROUTES 一致
-SW_PAGE_ROUTES = ["/", "/study", "/review", "/dictation", "/quiz", "/progress", "/starred", "/wordbooks"]
+SW_PAGE_ROUTES = ["/", "/login", "/study", "/review", "/dictation", "/quiz", "/progress", "/starred", "/wordbooks"]
 
 # create-next-app 留下的、项目从未引用的示例资源
 SCAFFOLD_SVGS = ["next.svg", "vercel.svg", "file.svg", "globe.svg", "window.svg"]

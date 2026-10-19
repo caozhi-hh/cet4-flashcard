@@ -7,7 +7,7 @@
     "build": "next build && npm run build:sw",
     "build:next": "next build",
     "build:sw": "serwist build serwist.config.js",
-    "test:ui": "esbuild tests/interaction/toast.test.tsx --bundle --outfile=tests/interaction/.tmp/toast.test.js --format=esm --platform=node --jsx=automatic --alias:@=./src --loader:.css=empty --log-level=warning && node tests/interaction/run.mjs",
+    "test:ui": "esbuild tests/interaction/toast.test.tsx --bundle --outfile=tests/interaction/.tmp/toast.test.js --format=esm --platform=node --jsx=automatic --alias:@=./src --alias:next/navigation=./tests/interaction/mocks/next-navigation.ts --loader:.css=empty --log-level=warning && node tests/interaction/run.mjs",
     "lint": "eslint"
   },
   "dependencies": {

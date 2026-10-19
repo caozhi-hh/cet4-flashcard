@@ -7,13 +7,62 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 // 单次请求超时：后端没启动时不要让页面无限转圈
 const TIMEOUT_MS = 15000;
 
+// 与后端 app/config.py 保持一致（Cookie 名 / CSRF 头名）
+const CSRF_COOKIE = "cet4_csrf";
+const CSRF_HEADER = "X-CSRF-Token";
+/** 会话失效（401）时广播，由 AuthGate 统一处理跳转，避免每页各写一遍 */
+export const UNAUTHORIZED_EVENT = "cet4:unauthorized";
+
+/** 带 HTTP 状态码的错误：401 需要被单独识别（会话过期/未登录） */
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+function readCookie(name: string): string {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
+/** 取 CSRF 令牌；没有就先领一个（令牌会随登录/注册轮换，所以每次都重新读 cookie） */
+async function ensureCsrfToken(): Promise<string> {
+  const existing = readCookie(CSRF_COOKIE);
+  if (existing) return existing;
+  try {
+    await fetch(`${API_BASE}/api/auth/csrf`, { credentials: "include" });
+  } catch {
+    // 领不到就返回空串，让后端以 403 明确拒绝，而不是在这里抛网络错误
+  }
+  return readCookie(CSRF_COOKIE);
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const method = (options?.method ?? "GET").toUpperCase();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((options?.headers as Record<string, string>) ?? {}),
+  };
+
+  // 写请求必须带 CSRF 头（后端对所有 /api 写请求强制校验）
+  if (method !== "GET" && method !== "HEAD") {
+    const token = await ensureCsrfToken();
+    if (token) headers[CSRF_HEADER] = token;
+  }
+
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
-      headers: { "Content-Type": "application/json" },
+      // Cookie 会话认证：同源与本地跨端口 dev 都必须带上凭证
+      credentials: "include",
       signal: AbortSignal.timeout(TIMEOUT_MS),
       ...options,
+      headers,
     });
   } catch (err) {
     // 网络层失败（服务没启动 / 断网 / 超时）：抛出可读原因。
@@ -21,6 +70,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     const timeout = err instanceof Error && err.name === "TimeoutError";
     throw new Error(timeout ? "请求超时，请确认后端服务在运行" : "无法连接后端服务，请确认服务已启动");
   }
+
   if (!res.ok) {
     // 透出 FastAPI 的 {"detail": ...}，让失败原因直接可见
     let detail = "";
@@ -30,10 +80,33 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     } catch {
       // 响应不是 JSON：下面用状态码兜底
     }
-    throw new Error(detail || `请求失败（HTTP ${res.status}）`);
+    if (res.status === 401 && typeof window !== "undefined") {
+      // 会话过期/未登录：广播出去，由 AuthGate 统一引导到登录页
+      window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+    }
+    throw new ApiError(detail || `请求失败（HTTP ${res.status}）`, res.status);
   }
   return res.json();
 }
+
+/** 认证 */
+export const authApi = {
+  /** 当前登录用户；未登录时抛 ApiError(401) */
+  me: () => request<AuthUser>("/api/auth/me"),
+  /** 领取 CSRF 令牌（页面启动时调用一次即可） */
+  csrf: () => request<{ csrf_token: string }>("/api/auth/csrf"),
+  login: (email: string, password: string) =>
+    request<AuthUser>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  register: (email: string, password: string) =>
+    request<AuthUser>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  logout: () => request<{ message: string }>("/api/auth/logout", { method: "POST" }),
+};
 
 /** 学习 */
 export const studyApi = {
@@ -117,4 +190,4 @@ export const starredApi = {
 };
 
 /** 类型导入 */
-import type { FlashCard, StudyResponse, Rating, RatingPreview, QuizQuestion, QuizResult, ProgressOverview, DailyProgress, Wordbook, StarredWord } from "./types";
+import type { AuthUser, FlashCard, StudyResponse, Rating, RatingPreview, QuizQuestion, QuizResult, ProgressOverview, DailyProgress, Wordbook, StarredWord } from "./types";

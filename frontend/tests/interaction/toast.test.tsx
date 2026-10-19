@@ -12,9 +12,14 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import FlashCard from "@/components/FlashCard";
 import StudyPage from "@/app/study/page";
+import LoginPage from "@/app/login/page";
+import AuthGate from "@/components/AuthGate";
+import { AuthProvider } from "@/components/AuthProvider";
 import { ToastProvider } from "@/components/ui/toast";
 import { computeStats, isCorrect, type WordAttempt } from "@/lib/dictation";
 import type { FlashCard as CardType } from "@/lib/types";
+// 与 --alias:next/navigation=... 指向同一个文件，因此共享跳转记录
+import { __navigationCalls, __resetNavigation } from "./mocks/next-navigation";
 
 const CARD: CardType = {
   status: "new",
@@ -225,6 +230,195 @@ async function main() {
   const ttsText = document.body.textContent || "";
   check("朗读失败时出现提示", ttsText.includes("朗读失败"), ttsText.replace(/\s+/g, " ").slice(-90));
   await act(async () => starRoot.unmount());
+
+  // === 用例 8：未登录访问受保护页 → 引导登录，且不渲染受保护内容 ===
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+  __resetNavigation("/study");
+  (globalThis as any).fetch = async (input: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (url.includes("/api/auth/me")) return json({ detail: "未登录" }, 401);
+    if (url.includes("/api/auth/csrf")) return json({ csrf_token: "t" });
+    return json({});
+  };
+  const gateHost = document.createElement("div");
+  document.body.appendChild(gateHost);
+  const gateRoot = createRoot(gateHost);
+  await act(async () => {
+    gateRoot.render(
+      <ToastProvider>
+        <AuthProvider>
+          <AuthGate>
+            <div>受保护内容</div>
+          </AuthGate>
+        </AuthProvider>
+      </ToastProvider>
+    );
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  const gateCalls = __navigationCalls();
+  check("未登录被引导到 /login", gateCalls.some((c) => c.endsWith(":/login")), gateCalls.join(" | "));
+  check("未登录不渲染受保护内容", !document.body.textContent?.includes("受保护内容"), "");
+  check("记住了原目标路径", sessionStorage.getItem("cet4_next_path") === "/study", String(sessionStorage.getItem("cet4_next_path")));
+  await act(async () => gateRoot.unmount());
+  gateHost.remove();
+
+  // === 用例 9：已登录访问 /login → 直接回首页 ===
+  __resetNavigation("/login");
+  (globalThis as any).fetch = async (input: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (url.includes("/api/auth/me")) return json({ id: 1, email: "a@b.com", created_at: null });
+    return json({});
+  };
+  const backHost = document.createElement("div");
+  document.body.appendChild(backHost);
+  const backRoot = createRoot(backHost);
+  await act(async () => {
+    backRoot.render(
+      <ToastProvider>
+        <AuthProvider>
+          <AuthGate>
+            <div>应用内容</div>
+          </AuthGate>
+        </AuthProvider>
+      </ToastProvider>
+    );
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  check("已登录访问 /login 回首页", __navigationCalls().some((c) => c === "replace:/"), __navigationCalls().join(" | "));
+  await act(async () => backRoot.unmount());
+  backHost.remove();
+
+  // === 用例 10：登录失败要显示后端给的原因 ===
+  __resetNavigation("/login");
+  (globalThis as any).fetch = async (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url.includes("/api/auth/me")) return json({ detail: "未登录" }, 401);
+    if (url.includes("/api/auth/csrf")) return json({ csrf_token: "t" });
+    if (url.includes("/api/auth/login") && method === "POST") return json({ detail: "邮箱或密码不正确" }, 401);
+    return json({});
+  };
+  const loginHost = document.createElement("div");
+  document.body.appendChild(loginHost);
+  const loginRoot = createRoot(loginHost);
+  await act(async () => {
+    loginRoot.render(
+      <ToastProvider>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </ToastProvider>
+    );
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  /** 受控 input 要改值必须走原生 setter + input 事件，直接赋 value 不会触发 React onChange */
+  const setInput = async (el: HTMLInputElement, value: string) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(el, value);
+    await act(async () => {
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+  const submitOf = (host: HTMLElement) =>
+    [...host.querySelectorAll("button")].find((b) => b.getAttribute("type") === "submit");
+
+  const emailInput = loginHost.querySelector('input[type="email"]') as HTMLInputElement;
+  const pwdInput = loginHost.querySelector('input[type="password"]') as HTMLInputElement;
+  check("登录页渲染邮箱与密码输入", !!emailInput && !!pwdInput, "");
+  await setInput(emailInput, "a@b.com");
+  await setInput(pwdInput, "password123");
+  const submitBtn = submitOf(loginHost);
+  if (submitBtn) await click(submitBtn);
+  check(
+    "登录失败显示后端原因",
+    (loginHost.textContent || "").includes("邮箱或密码不正确"),
+    (loginHost.textContent || "").replace(/\s+/g, " ").slice(-70)
+  );
+  await act(async () => loginRoot.unmount());
+  loginHost.remove();
+
+  // === 用例 11：登录成功后跳回之前记住的目标路径 ===
+  __resetNavigation("/login");
+  sessionStorage.setItem("cet4_next_path", "/progress");
+  (globalThis as any).fetch = async (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url.includes("/api/auth/me")) return json({ detail: "未登录" }, 401);
+    if (url.includes("/api/auth/csrf")) return json({ csrf_token: "t" });
+    if (url.includes("/api/auth/login") && method === "POST") return json({ id: 1, email: "a@b.com", created_at: null });
+    return json({});
+  };
+  const okHost = document.createElement("div");
+  document.body.appendChild(okHost);
+  const okRoot = createRoot(okHost);
+  await act(async () => {
+    okRoot.render(
+      <ToastProvider>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </ToastProvider>
+    );
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await setInput(okHost.querySelector('input[type="email"]') as HTMLInputElement, "a@b.com");
+  await setInput(okHost.querySelector('input[type="password"]') as HTMLInputElement, "password123");
+  const submit2 = submitOf(okHost);
+  if (submit2) await click(submit2);
+  const okCalls = __navigationCalls();
+  check("登录后跳回原目标（且是最后一次跳转）", okCalls[okCalls.length - 1] === "replace:/progress", okCalls.join(" | "));
+  check("跳转后清掉记住的路径", sessionStorage.getItem("cet4_next_path") === null, String(sessionStorage.getItem("cet4_next_path")));
+  await act(async () => okRoot.unmount());
+  okHost.remove();
+
+  // === 用例 12：写请求必须带上 CSRF 头（前后端契约）===
+  document.cookie = "cet4_csrf=test-token-abc";
+  let starHeaders: Record<string, string> = {};
+  (globalThis as any).fetch = async (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (url.includes("/api/study/preview")) return json({ word_id: CARD.word.id, ratings: [] });
+    if (url.includes("/api/starred")) {
+      starHeaders = (init?.headers ?? {}) as Record<string, string>;
+      return json({ message: "已添加" });
+    }
+    return json({});
+  };
+  const csrfHost = document.createElement("div");
+  document.body.appendChild(csrfHost);
+  const csrfRoot = createRoot(csrfHost);
+  await act(async () => {
+    csrfRoot.render(
+      <ToastProvider>
+        <AuthProvider>
+          <FlashCard card={CARD} onRate={() => {}} />
+        </AuthProvider>
+      </ToastProvider>
+    );
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await click(starButton(csrfHost));
+  check(
+    "写请求带 X-CSRF-Token 且与 cookie 一致",
+    starHeaders["X-CSRF-Token"] === "test-token-abc",
+    JSON.stringify(starHeaders)
+  );
+  await act(async () => csrfRoot.unmount());
+  document.cookie = "cet4_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT";
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);

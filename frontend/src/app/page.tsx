@@ -6,8 +6,11 @@ import { progressApi, wordbookApi } from "@/lib/api";
 import type { ProgressOverview, Wordbook } from "@/lib/types";
 import { getSelectedWordbook, onWordbookChange } from "@/lib/wordbook";
 import { getDailyGoal, setDailyGoal, onGoalChange, GOAL_OPTIONS, DEFAULT_GOAL } from "@/lib/settings";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function HomePage() {
+  const { user, logout } = useAuth();
+  const [loggingOut, setLoggingOut] = useState(false);
   const [progress, setProgress] = useState<ProgressOverview | null>(null);
   const [wordbook, setWordbook] = useState<Wordbook | null>(null);
   const [selectedId, setSelectedId] = useState<string>(getSelectedWordbook());
@@ -33,6 +36,13 @@ export default function HomePage() {
     };
   }, []);
 
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    // 退出后 user 变为 null，AuthGate 会自动把人送回登录页
+    await logout();
+  };
+
   return (
     <div className="space-y-6">
       {/* 标题 */}
@@ -42,6 +52,22 @@ export default function HomePage() {
         </h1>
         <p className="text-cocoa-soft mt-1.5 text-sm">每天 {goal} 个词，轻松过四级</p>
       </div>
+
+      {/* 当前账号 + 退出登录 */}
+      {user && (
+        <div className="flex items-center justify-center gap-2 text-xs text-cocoa-soft">
+          <span className="truncate max-w-[60%]" title={user.email}>
+            👤 {user.email}
+          </span>
+          <button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="px-2.5 py-1 rounded-lg border border-honey hover:border-cocoa-soft hover:text-cocoa transition-colors disabled:opacity-60"
+          >
+            {loggingOut ? "退出中…" : "退出登录"}
+          </button>
+        </div>
+      )}
 
       {/* 数据加载失败提示：不要用 "-" 和 "0 天" 把服务异常伪装成正常 */}
       {error && !progress && (

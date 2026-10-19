@@ -1,5 +1,12 @@
 /** API 类型定义 */
 
+/** 当前登录用户（后端只返回这些字段，绝不包含密码哈希） */
+export interface AuthUser {
+  id: number;
+  email: string;
+  created_at: string | null;
+}
+
 export interface Word {
   id: number;
   word: string;
