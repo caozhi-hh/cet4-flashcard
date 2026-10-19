@@ -60,6 +60,104 @@ export interface PlanForecast {
   generated_at: string;
 }
 
+/** === 分级阅读 === */
+
+/** 列表/详情共用的文章概要 */
+export interface ReadingArticleSummary {
+  slug: string;
+  title: string;
+  title_zh: string;
+  level: string; // A1 / A2 / B1
+  topic: string;
+  goals: string[];
+  minutes: number;
+  word_count: number;
+  question_count: number;
+  /** 原创示例标注（非官方真题） */
+  source: string;
+}
+
+/** 正文里的一个渲染项（一个词 / 空白 / 标点） */
+export interface ReadingToken {
+  text: string;
+  index: number;
+  span_id: string;
+  is_word: boolean;
+  sentence: number;
+  paragraph: number;
+  /** unknown=词库未收录 / new=已收录未学 / learning / known */
+  status: "unknown" | "new" | "learning" | "known";
+  term: {
+    word_id: number;
+    headword: string;
+    definition: string;
+    phonetic: string | null;
+    tags: string | null;
+    frq: number | null;
+    status: string;
+    starred: boolean;
+  } | null;
+}
+
+export interface ReadingQuestion {
+  id: string;
+  prompt: string;
+  options: string[];
+}
+
+export interface ReadingArticleDetail {
+  article: ReadingArticleSummary & {
+    paragraphs: { en: string; zh: string }[];
+    questions: ReadingQuestion[];
+  };
+  /** 按段落分组的渲染项 */
+  tokens: ReadingToken[][];
+}
+
+export interface ReadingAttemptResult {
+  slug: string;
+  title: string;
+  level: string;
+  score: number;
+  total: number;
+  answered: number;
+  passed: boolean;
+  duration_seconds: number;
+  completed_at: string;
+  details: {
+    question_id: string;
+    chosen: number | null;
+    correct_choice: number;
+    correct: boolean;
+    explanation: string;
+  }[];
+}
+
+export interface ReadingProgress {
+  total_articles: number;
+  completed_articles: number;
+  passed_articles: number;
+  completed_slugs: string[];
+  pass_ratio: number;
+  by_level: { level: string; total: number; completed: number }[];
+  articles: (ReadingArticleSummary & {
+    attempts: number;
+    best_score: number | null;
+    best_total: number | null;
+    last_completed_at: string | null;
+    last_duration_seconds?: number;
+  })[];
+  history: {
+    slug: string;
+    title: string;
+    level: string;
+    score: number;
+    total: number;
+    duration_seconds: number;
+    completed_at: string;
+  }[];
+}
+
 export interface Word {
   id: number;
   word: string;

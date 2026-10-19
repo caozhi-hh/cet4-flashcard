@@ -130,6 +130,46 @@ export const planApi = {
   forecast: () => request<PlanForecast>("/api/plan/forecast"),
 };
 
+/** 分级阅读 */
+export const readingApi = {
+  /** 文章列表（可按难度与学习目标筛选；公共内容） */
+  list: (level?: string, goal?: string) => {
+    const params = new URLSearchParams();
+    if (level) params.set("level", level);
+    if (goal) params.set("goal", goal);
+    const qs = params.toString();
+    return request<{ articles: ReadingArticleSummary[]; total: number; levels: string[] }>(
+      `/api/reading/articles${qs ? `?${qs}` : ""}`
+    );
+  },
+  /** 文章详情（含分词渲染项；**不含正确答案**） */
+  detail: (slug: string) => request<ReadingArticleDetail>(`/api/reading/articles/${slug}`),
+  /** 点词查义：服务端只做精确匹配 */
+  lookup: (word: string) =>
+    request<{
+      found: boolean;
+      word: string;
+      headword?: string;
+      definition?: string;
+      phonetic?: string | null;
+      tags?: string | null;
+      status?: string;
+      message?: string;
+    }>(`/api/reading/lookup?word=${encodeURIComponent(word)}`),
+  /** 提交作答：分数由服务端判定，客户端不传分数 */
+  submit: (
+    slug: string,
+    answers: { question_id: string; choice: number }[],
+    durationSeconds: number
+  ) =>
+    request<ReadingAttemptResult>("/api/reading/attempts", {
+      method: "POST",
+      body: JSON.stringify({ slug, answers, duration_seconds: durationSeconds }),
+    }),
+  /** 当前用户的阅读进度与历史 */
+  progress: () => request<ReadingProgress>("/api/reading/progress"),
+};
+
 /** 学习 */
 export const studyApi = {
   getToday: (wordbook?: string, limit?: number) => {
@@ -212,4 +252,4 @@ export const starredApi = {
 };
 
 /** 类型导入 */
-import type { AuthUser, FlashCard, StudyResponse, Rating, RatingPreview, QuizQuestion, QuizResult, ProgressOverview, DailyProgress, Wordbook, StarredWord, GoalOption, StudyPlan, PlanForecast } from "./types";
+import type { AuthUser, FlashCard, StudyResponse, Rating, RatingPreview, QuizQuestion, QuizResult, ProgressOverview, DailyProgress, Wordbook, StarredWord, GoalOption, StudyPlan, PlanForecast, ReadingArticleSummary, ReadingArticleDetail, ReadingAttemptResult, ReadingProgress } from "./types";

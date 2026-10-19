@@ -28,7 +28,7 @@ declare const self: ServiceWorkerGlobalScope & {
  * cleanURLs 选项对 `/study → /study.html` 不生效）。
  * 所以这里按真实访问地址声明，安装时由浏览器去抓 —— 这一步是联网的，没问题。
  */
-const PAGE_ROUTES = ["/", "/login", "/plan", "/study", "/review", "/dictation", "/quiz", "/progress", "/starred", "/wordbooks"];
+const PAGE_ROUTES = ["/", "/login", "/plan", "/reading", "/study", "/review", "/dictation", "/quiz", "/progress", "/starred", "/wordbooks"];
 
 const serwist = new Serwist({
   precacheEntries: [

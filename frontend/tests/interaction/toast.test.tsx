@@ -15,6 +15,7 @@ import StudyPage from "@/app/study/page";
 import LoginPage from "@/app/login/page";
 import PlanPage from "@/app/plan/page";
 import HomePage from "@/app/page";
+import ReadingPage from "@/app/reading/page";
 import AuthGate from "@/components/AuthGate";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ToastProvider } from "@/components/ui/toast";
@@ -630,6 +631,190 @@ async function main() {
   );
   await act(async () => homeRoot.unmount());
   homeHost.remove();
+
+  // === 用例 15：分级阅读完整流程（选文章 → 分词渲染 → 点词 → 答题 → 服务端判分结果）===
+  const SUMMARY = {
+    slug: "a1-my-morning-routine",
+    title: "My Morning Routine",
+    title_zh: "我的早晨习惯",
+    level: "A1",
+    topic: "日常生活",
+    goals: ["general"],
+    minutes: 3,
+    word_count: 120,
+    question_count: 2,
+    source: "原创示例（非官方真题）",
+  };
+  const termOf = (id: number, headword: string, definition: string, status: string) => ({
+    word_id: id,
+    headword,
+    definition,
+    phonetic: "/x/",
+    tags: "cet4",
+    frq: 500,
+    status,
+    starred: false,
+  });
+  const TOKENS = [
+    [
+      { text: "I", index: 0, span_id: "ID-0-0", is_word: true, sentence: 0, paragraph: 0, status: "known", term: termOf(1, "I", "pron. 我", "known") },
+      { text: " ", index: 1, span_id: "ID-0-1", is_word: false, sentence: 0, paragraph: 0, status: "unknown", term: null },
+      { text: "drink", index: 2, span_id: "ID-0-2", is_word: true, sentence: 0, paragraph: 0, status: "learning", term: termOf(2, "drink", "v. 喝", "learning") },
+      { text: " ", index: 3, span_id: "ID-0-3", is_word: false, sentence: 0, paragraph: 0, status: "unknown", term: null },
+      { text: "zzz", index: 4, span_id: "ID-0-4", is_word: true, sentence: 0, paragraph: 0, status: "unknown", term: null },
+      { text: ".", index: 5, span_id: "ID-0-5", is_word: false, sentence: 0, paragraph: 0, status: "unknown", term: null },
+    ],
+  ];
+  const QUESTIONS = [
+    { id: "q1", prompt: "What does the writer drink?", options: ["Tea", "Coffee"] },
+    { id: "q2", prompt: "How does he go to school?", options: ["By bus", "By bike"] },
+  ];
+  let submitted: any = null;
+  let lookupUrl = "";
+  (globalThis as any).fetch = async (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url.includes("/api/reading/articles/"))
+      return json({
+        article: {
+          ...SUMMARY,
+          paragraphs: [{ en: "I drink zzz.", zh: "我喝 zzz。" }],
+          questions: QUESTIONS,
+        },
+        tokens: TOKENS,
+      });
+    if (url.includes("/api/reading/articles"))
+      return json({ articles: [SUMMARY], total: 1, levels: ["A1", "A2", "B1"] });
+    if (url.includes("/api/reading/lookup")) {
+      lookupUrl = url;
+      return json({ found: false, word: "zzz", message: "词库暂未收录该词，可先加入生词本稍后复习" });
+    }
+    if (url.includes("/api/reading/attempts") && method === "POST") {
+      submitted = JSON.parse(init.body);
+      return json({
+        slug: SUMMARY.slug,
+        title: SUMMARY.title,
+        level: "A1",
+        score: 1,
+        total: 2,
+        answered: 2,
+        passed: false,
+        duration_seconds: 42,
+        completed_at: "2026-10-19T00:00:00+00:00",
+        details: [
+          { question_id: "q1", chosen: 0, correct_choice: 0, correct: true, explanation: "第一段说喝的是茶。" },
+          { question_id: "q2", chosen: 1, correct_choice: 0, correct: false, explanation: "第三段说是坐公交车。" },
+        ],
+      });
+    }
+    if (url.includes("/api/reading/progress"))
+      return json({
+        total_articles: 1,
+        completed_articles: 0,
+        passed_articles: 0,
+        completed_slugs: [],
+        pass_ratio: 0.6,
+        by_level: [{ level: "A1", total: 1, completed: 0 }],
+        articles: [{ ...SUMMARY, attempts: 0, best_score: null, best_total: null, last_completed_at: null }],
+        history: [],
+      });
+    return json({});
+  };
+
+  // jsdom 没实现 scrollTo，页面里会调用它，这里兜一下避免噪声
+  (window as any).scrollTo = () => {};
+
+  const readingHost = document.createElement("div");
+  document.body.appendChild(readingHost);
+  const readingRoot = createRoot(readingHost);
+  await act(async () => {
+    readingRoot.render(
+      <ToastProvider>
+        <ReadingPage />
+      </ToastProvider>
+    );
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  const rdText = () => (readingHost.textContent || "").replace(/\s+/g, " ");
+  check("阅读页显示文章列表", rdText().includes("My Morning Routine") && rdText().includes("A1"), rdText().slice(0, 90));
+  check("阅读页显示难度筛选", rdText().includes("全部") && rdText().includes("入门 A1"), "");
+  check("阅读页显示进度概览", rdText().includes("已读 0 / 1"), rdText().slice(-80));
+
+  const articleBtn = [...readingHost.querySelectorAll("button")].find((b) =>
+    (b.textContent || "").includes("My Morning Routine")
+  );
+  if (articleBtn) await click(articleBtn);
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  check("进入阅读视图并渲染正文", rdText().includes("I drink zzz"), rdText().slice(0, 90));
+  check("带出中英对照开关", rdText().includes("显示译文"), "");
+  check("显示原创示例标注", rdText().includes("原创示例"), rdText().slice(-120));
+
+  // 点词 → 弹窗给出释义与掌握状态
+  const wordSpans = [...readingHost.querySelectorAll('span[role="button"]')];
+  const drinkSpan = wordSpans.find((s) => (s.textContent || "") === "drink");
+  check("正文里的词是可点击的分段项", !!drinkSpan, String(wordSpans.length));
+  if (drinkSpan) await click(drinkSpan);
+  check("点词弹出释义", rdText().includes("v. 喝"), rdText().slice(-120));
+  check("弹窗显示掌握状态", rdText().includes("学习中"), "");
+  check("命中词库的词不必再请求服务端", lookupUrl === "", lookupUrl);
+
+  // 未收录词 → 明确反馈
+  const zzzSpan = [...readingHost.querySelectorAll('span[role="button"]')].find(
+    (s) => (s.textContent || "") === "zzz"
+  );
+  if (zzzSpan) await click(zzzSpan);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  check("未收录词给出明确反馈", rdText().includes("词库暂未收录该词"), rdText().slice(-110));
+  check("未收录词确实问了服务端", lookupUrl.includes("word=zzz"), lookupUrl);
+  check("未收录词不能加入生词本", rdText().includes("无法加入生词本"), "");
+
+  // 答题 → 提交（客户端不传分数）→ 服务端结果
+  const optButtons = [...readingHost.querySelectorAll("button")].filter((b) =>
+    /^[AB]\. /.test((b.textContent || "").trim())
+  );
+  check("渲染出选项按钮", optButtons.length === 4, String(optButtons.length));
+  const tea = optButtons.find((b) => (b.textContent || "").includes("Tea"));
+  const bike = optButtons.find((b) => (b.textContent || "").includes("By bike"));
+  if (tea) await click(tea);
+  if (bike) await click(bike);
+
+  const submitReading = [...readingHost.querySelectorAll("button")].find((b) =>
+    (b.textContent || "").includes("提交答案")
+  );
+  check(
+    "有提交按钮且显示已答数量",
+    !!submitReading && (submitReading.textContent || "").includes("2/2"),
+    submitReading?.textContent ?? ""
+  );
+  if (submitReading) await click(submitReading);
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  check(
+    "提交的是题号与选项，不含任何分数",
+    submitted?.answers?.length === 2 &&
+      submitted.answers.every((a: any) => typeof a.question_id === "string" && typeof a.choice === "number") &&
+      submitted.score === undefined &&
+      submitted.total === undefined,
+    JSON.stringify(submitted)
+  );
+  check("显示服务端判分结果", rdText().includes("得分 1 / 2"), rdText().slice(0, 120));
+  check("显示答案与解析", rdText().includes("第三段说是坐公交车"), "");
+  check("标记是否通过", rdText().includes("再读一遍会更好"), "");
+  await act(async () => readingRoot.unmount());
+  readingHost.remove();
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);

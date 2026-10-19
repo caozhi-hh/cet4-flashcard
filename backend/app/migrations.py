@@ -289,3 +289,42 @@ def ensure_study_plan_schema(engine: Engine, backup_dir: Path | None = None) -> 
         ))
     logger.info(f"{STUDY_PLAN_TABLE} 表已创建（备份：{backed_up}）")
     return {"created_table": True, "backed_up": backed_up}
+
+
+READING_TABLE = "reading_attempts"
+
+
+def ensure_reading_schema(engine: Engine, backup_dir: Path | None = None) -> dict:
+    """确保 reading_attempts 表存在（分级阅读的答题记录）
+
+    同样只**新建一张表**：不动任何已有表与行；建表前先备份；幂等。
+    返回 {"created_table": bool, "backed_up": str | None}
+    """
+    if _table_columns(engine, READING_TABLE):
+        return {"created_table": False, "backed_up": None}
+
+    backed_up = _backup_once(engine, backup_dir)
+    with engine.begin() as conn:
+        conn.execute(text(
+            f"""
+            CREATE TABLE {READING_TABLE} (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                slug VARCHAR(64) NOT NULL,
+                level VARCHAR(8),
+                score INTEGER NOT NULL DEFAULT 0,
+                total INTEGER NOT NULL DEFAULT 0,
+                duration_seconds INTEGER DEFAULT 0,
+                completed_at VARCHAR(30),
+                created_at VARCHAR(30)
+            )
+            """
+        ))
+        # 查询都按 (user_id) 与 (slug) 走
+        conn.execute(text(f"CREATE INDEX ix_{READING_TABLE}_user_id ON {READING_TABLE} (user_id)"))
+        conn.execute(text(f"CREATE INDEX ix_{READING_TABLE}_slug ON {READING_TABLE} (slug)"))
+        conn.execute(
+            text(f"CREATE INDEX ix_{READING_TABLE}_completed_at ON {READING_TABLE} (completed_at)")
+        )
+    logger.info(f"{READING_TABLE} 表已创建（备份：{backed_up}）")
+    return {"created_table": True, "backed_up": backed_up}

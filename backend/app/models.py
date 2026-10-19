@@ -123,6 +123,25 @@ class CustomWordbook(Base):
     created_at = Column(String(30), default=lambda: datetime.now(timezone.utc).isoformat())
 
 
+class ReadingAttempt(Base):
+    """分级阅读答题记录（用户级）
+
+    只保存**服务端判分**的结果：score/total 由后端依据文章自身答案计算，
+    客户端提交的分数、总题数与 user_id 一律不采信。
+    """
+    __tablename__ = "reading_attempts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    slug = Column(String(64), nullable=False, index=True)   # 文章 slug（正文在 JSON，不在库里）
+    level = Column(String(8))                               # A1 / A2 / B1
+    score = Column(Integer, nullable=False, default=0)
+    total = Column(Integer, nullable=False, default=0)
+    duration_seconds = Column(Integer, default=0)           # 阅读+作答耗时（前端上报，仅作参考）
+    completed_at = Column(String(30), index=True)
+    created_at = Column(String(30), default=_now_iso)
+
+
 class StudyPlan(Base):
     """用户级学习计划
 

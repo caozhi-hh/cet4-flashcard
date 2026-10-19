@@ -210,6 +210,12 @@ export default function HomePage() {
           >
             学习计划
           </Link>
+          <Link
+            href="/reading"
+            className="block py-3.5 bg-milk text-center rounded-xl font-semibold text-cocoa border border-honey hover:border-cocoa-soft transition-colors active:scale-[0.98]"
+          >
+            分级阅读
+          </Link>
         </div>
       </div>
     </div>

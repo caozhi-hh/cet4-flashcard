@@ -21,6 +21,8 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path("/data") if Path("/data").exists() else BASE_DIR / "data"
 DB_PATH = DATA_DIR / "cet4.db"
 WORDS_JSON = BASE_DIR / "data" / "cet4_words.json"
+# 分级阅读文章（本项目原创示例）：跟着代码走，不受 /data 数据目录影响
+READING_JSON = BASE_DIR / "data" / "reading_articles.json"
 
 # === 数据库 ===
 DATABASE_URL = f"sqlite:///{DB_PATH}"
