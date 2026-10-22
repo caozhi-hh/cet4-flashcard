@@ -77,12 +77,45 @@ WORDBOOK_DEFS = [
     ("exam_cet4",    "四级考纲标注词",      "ECDICT 标注 cet4 的 3300+ 词，最贴近考纲",    "🎯", "#D98F8F", _filter_tag("cet4")),
     ("exam_cet6",    "六级拓展词",          "ECDICT 标注 cet6 的词，四级后继续拔高",       "📈", "#8FA8D9", _filter_tag("cet6")),
     ("exam_ky",      "考研核心词",          "ECDICT 标注 ky（考研）的词，重合度极高",      "🎓", "#B9A8D8", _filter_tag("ky")),
+    ("exam_ielts",   "雅思标注词",          "ECDICT 标注 ielts 的词（2400+）",             "🌍", "#8FD9C4", _filter_tag("ielts")),
+    ("exam_toefl",   "托福标注词",          "ECDICT 标注 toefl 的词（2300+）",             "✈️", "#D9B08F", _filter_tag("toefl")),
     ("coca1000",     "真·高频 1000（COCA）", "按 COCA 语料真实词频排的 1000 词（frq≤1397）", "📊", "#7FC8A9", _filter_coca_top(1397)),
     ("collins4",     "柯林斯 4 星以上",      "柯林斯词典 4-5 星词（1267 词），优先掌握",     "🌟", "#E0B76E", _filter_min_collins(4)),
     ("oxford3000",   "牛津核心 3000",        "收录于牛津核心 3000 的词（2535 词）",         "🏛", "#9FC8B0", _filter_oxford),
 ]
 
 DEFAULT_WORDBOOK = "core1000"
+
+
+# ===== 学习目标类型 =====
+# 英语学习平台的公共配置：目标 → 默认词书。
+# 默认词书一律指向**已有的**按 ECDICT 考试标签筛选的书，不新建重复分类。
+# (goal_type, 显示名, 说明, 默认词书 id)
+GOAL_TYPES = [
+    ("cet4",    "四级 CET-4",   "大学英语四级，国内主流考试",   "exam_cet4"),
+    ("cet6",    "六级 CET-6",   "大学英语六级，四级之后继续拔高", "exam_cet6"),
+    ("kaoyan",  "考研英语",      "硕士研究生入学英语",          "exam_ky"),
+    ("ielts",   "雅思 IELTS",   "出国留学语言考试",            "exam_ielts"),
+    ("toefl",   "托福 TOEFL",   "北美留学语言考试",            "exam_toefl"),
+    ("general", "日常英语",      "非应试的通用核心词汇",         "oxford3000"),
+]
+
+GOAL_TYPE_IDS = [g[0] for g in GOAL_TYPES]
+DEFAULT_GOAL_TYPE = "cet4"
+
+
+def get_goal_type(goal_type: str):
+    """返回 (goal_type, name, description, default_wordbook)，不存在返回 None"""
+    for item in GOAL_TYPES:
+        if item[0] == goal_type:
+            return item
+    return None
+
+
+def default_wordbook_for_goal(goal_type: str) -> str:
+    """目标类型对应的默认词书；未知目标回落到默认词书"""
+    item = get_goal_type(goal_type)
+    return item[3] if item else DEFAULT_WORDBOOK
 
 
 def get_preset_filter(wordbook_id: str):
@@ -129,25 +162,34 @@ def apply_custom_filter(query, Word, keywords: list[str], pos: str = "", freq_ma
     return query
 
 
-def apply_wordbook(query, Word, wordbook_id: str | None, db) -> "Query":
+def apply_wordbook(query, Word, wordbook_id: str | None, db, user_id: int | None = None) -> "Query":
     """统一应用词书过滤（预定义或自定义），返回过滤后的 query。
 
     - wordbook_id 为 None 或空 → 用默认书
-    - custom_ 前缀 → 优先用 AI 精选的 word_ids；无则 fallback 到关键词过滤
-    - 其他 → 预定义书
+    - custom_ 前缀 → **只允许当前用户自己的自定义书**；不存在或不属于自己时返回空集，
+      绝不因为"查不到"而退化成不过滤（那等于把整个词库当成了别人的私有书内容）
+    - 预定义书是公共数据，与 user_id 无关
     """
     import json as _json
+
+    from sqlalchemy import false
+
     wb_id = wordbook_id or DEFAULT_WORDBOOK
 
     if wb_id.startswith("custom_"):
         from .models import CustomWordbook
+
         try:
             cid = int(wb_id[7:])
         except ValueError:
-            return query
-        wb = db.query(CustomWordbook).filter(CustomWordbook.id == cid).first()
+            return query.filter(false())
+        wb = (
+            db.query(CustomWordbook)
+            .filter(CustomWordbook.id == cid, CustomWordbook.user_id == user_id)
+            .first()
+        )
         if not wb:
-            return query
+            return query.filter(false())
         # 优先用 AI 精选的 word_ids
         word_ids = _json.loads(wb.word_ids) if wb.word_ids else None
         if word_ids:

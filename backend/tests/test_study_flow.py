@@ -17,6 +17,7 @@
 
 import atexit
 import shutil
+import sqlite3
 import sys
 import warnings
 from pathlib import Path
@@ -26,6 +27,9 @@ from sqlalchemy.exc import SAWarning
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+TESTS_DIR = Path(__file__).resolve().parent
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
 
 # === 关键：必须在导入 app.database 之前改写配置，引擎才会指向临时库 ===
 TMP_DIR = BACKEND_DIR / "tests" / ".tmp-db"
@@ -60,7 +64,9 @@ atexit.register(_cleanup_tmp_db)
 with TestClient(app) as _boot:
     _boot.get("/api/health")
 
-client = TestClient(app)
+from testkit import AuthClient  # noqa: E402  引入 Cookie 会话后默认以登录用户运行
+
+client = AuthClient(app)  # 写请求自动带 CSRF 头，既有用例无需逐个改
 
 
 def _word_id() -> int:
@@ -137,7 +143,7 @@ def test_quiz_unanswered_does_not_clear_progress():
 
     res = client.post(
         "/api/quiz/submit",
-        json={"answers": [{"word_id": word_id, "answer": "", "correct_answer": "任意值"}]},
+        json={"answers": [{"word_id": word_id, "answer": ""}]},
     )
     assert res.status_code == 200, res.text[:120]
 
@@ -162,19 +168,35 @@ def test_starred_add_and_remove():
 
 
 def test_quiz_daily_and_submit():
-    """测验出题与交卷"""
+    """测验出题与交卷
+
+    契约已加固：题目**不下发正确答案**，判分由服务端依据词库数据完成。
+    所以这里按词库数据自己算出应作答内容，并顺带断言答案不在题面里。
+    """
     quiz = client.get("/api/quiz/daily").json()
     questions = quiz["questions"]
     assert questions, "测验未出题"
-    answers = [
-        {"word_id": q["word_id"], "answer": q["correct_answer"], "correct_answer": q["correct_answer"]}
-        for q in questions
-    ]
+    assert all("correct_answer" not in q for q in questions), "题目里不该带答案"
+
+    con = sqlite3.connect(str(config.DB_PATH))
+    answers = []
+    for q in questions:
+        row = con.execute(
+            "select word, definition from words where id = ?", (q["word_id"],)
+        ).fetchone()
+        assert row, f"词库缺少 {q['word_id']}"
+        word, definition = row
+        expected = word if q["quiz_type"] == "spell" else (
+            definition.split("；")[0] if "；" in definition else definition
+        )
+        answers.append({"word_id": q["word_id"], "answer": expected})
+    con.close()
+
     res = client.post("/api/quiz/submit", json={"answers": answers})
     assert res.status_code == 200, res.text[:120]
     body = res.json()
     assert body["total"] == len(questions)
-    assert body["score"] == len(questions), f"全对提交却得分 {body['score']}/{body['total']}"
+    assert body["score"] == len(questions), f"按词库作答却得分 {body['score']}/{body['total']}"
 
 
 def test_real_database_not_touched():

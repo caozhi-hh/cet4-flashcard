@@ -5,9 +5,13 @@ import Link from "next/link";
 import { progressApi, wordbookApi } from "@/lib/api";
 import type { ProgressOverview, Wordbook } from "@/lib/types";
 import { getSelectedWordbook, onWordbookChange } from "@/lib/wordbook";
-import { getDailyGoal, setDailyGoal, onGoalChange, GOAL_OPTIONS, DEFAULT_GOAL } from "@/lib/settings";
+import { getDailyGoal, onGoalChange, GOAL_OPTIONS, DEFAULT_GOAL } from "@/lib/settings";
+import { applyDailyGoal } from "@/lib/planGoal";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function HomePage() {
+  const { user, logout } = useAuth();
+  const [loggingOut, setLoggingOut] = useState(false);
   const [progress, setProgress] = useState<ProgressOverview | null>(null);
   const [wordbook, setWordbook] = useState<Wordbook | null>(null);
   const [selectedId, setSelectedId] = useState<string>(getSelectedWordbook());
@@ -15,6 +19,7 @@ export default function HomePage() {
   // （服务端 20 / 客户端 30 → React 报错并整段重渲染），挂载后再同步真实值。
   const [goal, setGoalState] = useState<number>(DEFAULT_GOAL);
   const [error, setError] = useState<string | null>(null);
+  const [goalError, setGoalError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadAll = () => {
@@ -33,6 +38,21 @@ export default function HomePage() {
     };
   }, []);
 
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    // 退出后 user 变为 null，AuthGate 会自动把人送回登录页
+    await logout();
+  };
+
+  // 每日新词量统一走 lib/planGoal：有服务端计划就写服务端，否则只写本机。
+  // 失败时明确报错且**不改动**当前数值，不把新设置伪装成已保存。
+  const pickGoal = async (n: number) => {
+    setGoalError(null);
+    const res = await applyDailyGoal(n);
+    if (!res.ok) setGoalError(res.message ?? "每日新词量保存失败，未修改");
+  };
+
   return (
     <div className="space-y-6">
       {/* 标题 */}
@@ -42,6 +62,22 @@ export default function HomePage() {
         </h1>
         <p className="text-cocoa-soft mt-1.5 text-sm">每天 {goal} 个词，轻松过四级</p>
       </div>
+
+      {/* 当前账号 + 退出登录 */}
+      {user && (
+        <div className="flex items-center justify-center gap-2 text-xs text-cocoa-soft">
+          <span className="truncate max-w-[60%]" title={user.email}>
+            👤 {user.email}
+          </span>
+          <button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="px-2.5 py-1 rounded-lg border border-honey hover:border-cocoa-soft hover:text-cocoa transition-colors disabled:opacity-60"
+          >
+            {loggingOut ? "退出中…" : "退出登录"}
+          </button>
+        </div>
+      )}
 
       {/* 数据加载失败提示：不要用 "-" 和 "0 天" 把服务异常伪装成正常 */}
       {error && !progress && (
@@ -77,7 +113,7 @@ export default function HomePage() {
               {GOAL_OPTIONS.map((n) => (
                 <button
                   key={n}
-                  onClick={() => setDailyGoal(n)}
+                  onClick={() => void pickGoal(n)}
                   className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
                     goal === n
                       ? "bg-cocoa text-milk"
@@ -89,6 +125,11 @@ export default function HomePage() {
               ))}
             </div>
           </div>
+          {goalError && (
+            <p role="alert" className="text-xs text-cocoa bg-berry/10 border border-berry/30 rounded-lg px-2 py-1.5 mt-2">
+              ⚠️ {goalError}
+            </p>
+          )}
           <div className="flex items-center gap-3">
             <div className="flex-1 bg-cream-deep rounded-full h-1.5 overflow-hidden">
               <div
@@ -143,7 +184,7 @@ export default function HomePage() {
         >
           开始今日学习
         </Link>
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-2 gap-2.5">
           <Link
             href="/wordbooks"
             className="block py-3.5 bg-milk text-center rounded-xl font-medium text-cocoa border border-honey hover:border-cocoa-soft transition-colors active:scale-[0.98]"
@@ -162,6 +203,18 @@ export default function HomePage() {
             className="block py-3.5 bg-milk text-center rounded-xl font-semibold text-cocoa border border-honey hover:border-cocoa-soft transition-colors active:scale-[0.98]"
           >
             复习
+          </Link>
+          <Link
+            href="/plan"
+            className="block py-3.5 bg-milk text-center rounded-xl font-semibold text-cocoa border border-honey hover:border-cocoa-soft transition-colors active:scale-[0.98]"
+          >
+            学习计划
+          </Link>
+          <Link
+            href="/reading"
+            className="block py-3.5 bg-milk text-center rounded-xl font-semibold text-cocoa border border-honey hover:border-cocoa-soft transition-colors active:scale-[0.98]"
+          >
+            分级阅读
           </Link>
         </div>
       </div>

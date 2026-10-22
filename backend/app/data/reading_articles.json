@@ -1,0 +1,406 @@
+{
+  "version": 1,
+  "note": "本项目原创的英语分级阅读示例文章，仅用于产品功能演示，不是任何官方考试的真题或模拟题，也不得标注为真题。",
+  "levels": ["A1", "A2", "B1"],
+  "articles": [
+    {
+      "slug": "a1-my-morning-routine",
+      "title": "My Morning Routine",
+      "title_zh": "我的早晨习惯",
+      "level": "A1",
+      "topic": "日常生活",
+      "goals": ["general", "cet4"],
+      "minutes": 3,
+      "source": "原创示例（非官方真题）",
+      "paragraphs": [
+        {
+          "en": "I get up at six thirty every day. First, I open the window and drink a glass of water. Then I wash my face and brush my teeth.",
+          "zh": "我每天六点半起床。先开窗，喝一杯水。然后洗脸、刷牙。"
+        },
+        {
+          "en": "For breakfast, I usually have bread, an egg, and a cup of tea. I do not drink coffee in the morning. My sister likes coffee, but I think tea is better.",
+          "zh": "早餐我通常吃面包、一个鸡蛋，再喝一杯茶。我早上不喝咖啡。我妹妹喜欢咖啡，但我觉得茶更好。"
+        },
+        {
+          "en": "At seven fifteen, I walk to the bus stop. The bus comes at seven twenty. I listen to English songs on the bus. It takes about twenty minutes to get to school.",
+          "zh": "七点十五分，我走到公交站。公交车七点二十来。我在车上听英文歌。到学校大约需要二十分钟。"
+        },
+        {
+          "en": "I like my morning routine. It is simple, but it helps me start the day well.",
+          "zh": "我喜欢我的早晨习惯。它很简单，但能帮我好好地开始一天。"
+        }
+      ],
+      "questions": [
+        {
+          "id": "q1",
+          "prompt": "What does the writer do first after getting up?",
+          "options": [
+            "Open the window and drink some water",
+            "Wash his face",
+            "Have breakfast",
+            "Walk to the bus stop"
+          ],
+          "answer": 0,
+          "explanation": "第一段写的是“先开窗，喝一杯水”，洗脸刷牙在之后。"
+        },
+        {
+          "id": "q2",
+          "prompt": "What does the writer drink in the morning?",
+          "options": ["Coffee", "Tea", "Milk", "Juice"],
+          "answer": 1,
+          "explanation": "第二段说“我早上不喝咖啡”，他喝的是茶。"
+        },
+        {
+          "id": "q3",
+          "prompt": "How does the writer go to school?",
+          "options": ["By bike", "On foot", "By bus", "By car"],
+          "answer": 2,
+          "explanation": "第三段提到走到公交站、坐车去学校。"
+        }
+      ]
+    },
+    {
+      "slug": "a1-the-lost-umbrella",
+      "title": "The Lost Umbrella",
+      "title_zh": "丢掉的雨伞",
+      "level": "A1",
+      "topic": "小故事",
+      "goals": ["general", "cet4"],
+      "minutes": 3,
+      "source": "原创示例（非官方真题）",
+      "paragraphs": [
+        {
+          "en": "Last Tuesday, it rained all day. Anna took her new umbrella to work. The umbrella was blue with small white stars.",
+          "zh": "上周二下了一整天雨。安娜带着她的新雨伞去上班。那把伞是蓝色的，上面有白色的小星星。"
+        },
+        {
+          "en": "At five o'clock, Anna left the office. She was tired and hungry. She got on the bus and forgot her umbrella. The umbrella stayed under the seat.",
+          "zh": "五点钟，安娜离开办公室。她又累又饿。她上了公交车，忘了雨伞。伞留在了座位下面。"
+        },
+        {
+          "en": "When Anna got home, she looked in her bag. The umbrella was not there. \"Oh no,\" she said. \"My new umbrella!\"",
+          "zh": "安娜到家后翻了翻包。伞不在里面。“糟了，”她说，“我的新雨伞！”"
+        },
+        {
+          "en": "The next morning, Anna called the bus company. A kind woman answered the phone. \"Yes, we have a blue umbrella,\" she said. Anna was very happy. She got her umbrella back the same afternoon.",
+          "zh": "第二天早上，安娜给公交公司打了电话。一位好心的女士接了电话。“是的，我们有一把蓝伞，”她说。安娜非常高兴。当天下午她就拿回了雨伞。"
+        }
+      ],
+      "questions": [
+        {
+          "id": "q1",
+          "prompt": "What was the weather like last Tuesday?",
+          "options": ["Sunny", "Rainy", "Windy", "Snowy"],
+          "answer": 1,
+          "explanation": "开头写“下了一整天雨”。"
+        },
+        {
+          "id": "q2",
+          "prompt": "Where did Anna forget her umbrella?",
+          "options": ["In the office", "At home", "On the bus", "In a shop"],
+          "answer": 2,
+          "explanation": "她上了公交车后忘记拿伞，伞留在座位下面。"
+        },
+        {
+          "id": "q3",
+          "prompt": "How did Anna get her umbrella back?",
+          "options": [
+            "She bought a new one",
+            "She called the bus company",
+            "A friend found it",
+            "She never got it back"
+          ],
+          "answer": 1,
+          "explanation": "她给公交公司打电话，下午就取回了伞。"
+        }
+      ]
+    },
+    {
+      "slug": "a2-why-we-forget-new-words",
+      "title": "Why We Forget New Words",
+      "title_zh": "我们为什么会忘记新单词",
+      "level": "A2",
+      "topic": "学习方法",
+      "goals": ["cet4", "cet6", "kaoyan", "general"],
+      "minutes": 4,
+      "source": "原创示例（非官方真题）",
+      "paragraphs": [
+        {
+          "en": "Many English learners read a new word, write it in a notebook, and forget it two days later. This is normal. The problem is not your memory; it is the way you study.",
+          "zh": "很多英语学习者读到一个新单词，把它记在笔记本上，两天后就忘了。这很正常。问题不在你的记忆力，而在你的学习方式。"
+        },
+        {
+          "en": "Scientists say that we forget most new information very quickly. After one day, we may remember only half of it. If we never see the word again, our brain decides that the word is not important. Then it disappears.",
+          "zh": "科学家说，大部分新信息我们很快就会忘记。一天之后，我们可能只记得一半。如果这个词再也不出现，大脑就会判断它不重要，然后把它丢掉。"
+        },
+        {
+          "en": "The good news is that forgetting can be slowed down. The best way is to meet the word again at the right time. If you review a word after one day, then after three days, then after a week, your brain begins to think: \"This word keeps coming back. I should keep it.\"",
+          "zh": "好消息是，遗忘可以变慢。最好的办法是在合适的时间再遇到这个词。如果你在一天后、三天后、一周后分别复习它，大脑就会开始想：“这个词老是出现，我该把它留下。”"
+        },
+        {
+          "en": "Another useful idea is to learn words in sentences, not alone. A word with a story or an example is easier to remember than a word on a list. Finally, use the word. Write a short message, say it out loud, or use it in a diary. When you use a word, it becomes yours.",
+          "zh": "另一个有用的办法是不要把单词孤立地背，而要放在句子里学。带有故事或例子的单词比清单上的单词更好记。最后，要用它：写一条短消息、大声说出来，或者写进日记。当你使用一个词，它就真正属于你了。"
+        }
+      ],
+      "questions": [
+        {
+          "id": "q1",
+          "prompt": "According to the text, why do we forget new words?",
+          "options": [
+            "Because our memory is always bad",
+            "Because we never meet the words again, so the brain drops them",
+            "Because the words are too long",
+            "Because we write them in a notebook"
+          ],
+          "answer": 1,
+          "explanation": "第二段说：如果这个词再也不出现，大脑就判断它不重要并丢掉。"
+        },
+        {
+          "id": "q2",
+          "prompt": "What is the best way to slow down forgetting?",
+          "options": [
+            "Read the word many times in one evening",
+            "Review the word at the right times",
+            "Copy the word one hundred times",
+            "Learn only easy words"
+          ],
+          "answer": 1,
+          "explanation": "第三段强调“在合适的时间再遇到这个词”。"
+        },
+        {
+          "id": "q3",
+          "prompt": "What else does the writer suggest?",
+          "options": [
+            "Learning words alone from a list",
+            "Learning words in sentences and using them",
+            "Never writing anything down",
+            "Only listening to songs"
+          ],
+          "answer": 1,
+          "explanation": "最后一段建议放在句子里学，并且真正去使用它。"
+        }
+      ]
+    },
+    {
+      "slug": "a2-a-weekend-in-the-mountains",
+      "title": "A Weekend in the Mountains",
+      "title_zh": "山里的一个周末",
+      "level": "A2",
+      "topic": "旅行",
+      "goals": ["general", "cet4", "ielts"],
+      "minutes": 4,
+      "source": "原创示例（非官方真题）",
+      "paragraphs": [
+        {
+          "en": "Last month, my cousin and I spent a weekend in the mountains. We left the city on Friday evening and arrived at a small village after midnight. The air was cold and clean.",
+          "zh": "上个月，我和表弟在山里过了一个周末。我们周五晚上离开城市，过了午夜才到一个小村子。空气又冷又干净。"
+        },
+        {
+          "en": "On Saturday morning, we climbed a hill behind the village. The path was narrow, and in some places we had to use our hands. From the top, we could see a river and hundreds of trees. We ate our sandwiches there and rested for an hour.",
+          "zh": "周六早上，我们爬了村后的一座小山。小路很窄，有些地方还得用手。从山顶上，我们能看到一条河和成百上千棵树。我们在那儿吃了三明治，休息了一个小时。"
+        },
+        {
+          "en": "In the afternoon, it started to rain, so we returned to the guesthouse. The owner, an old woman, made hot soup for us. She told us stories about the village. Forty years ago, she said, there were no roads and no visitors.",
+          "zh": "下午下起了雨，我们就回到民宿。房东是一位老太太，她给我们做了热汤，还讲了村子的故事。她说，四十年前这里没有路，也没有游客。"
+        },
+        {
+          "en": "We came back to the city on Sunday night, tired but happy. The weekend was short, but it felt much longer than two days. Next spring, we want to go there again.",
+          "zh": "周日晚上我们回到城里，很累但很开心。周末很短，却感觉比两天长得多。明年春天，我们还想再去。"
+        }
+      ],
+      "questions": [
+        {
+          "id": "q1",
+          "prompt": "When did they arrive at the village?",
+          "options": ["On Friday morning", "After midnight on Friday", "On Saturday morning", "On Sunday night"],
+          "answer": 1,
+          "explanation": "第一段说周五晚上出发，过了午夜到达。"
+        },
+        {
+          "id": "q2",
+          "prompt": "What did they do on Saturday morning?",
+          "options": [
+            "They swam in the river",
+            "They climbed a hill",
+            "They visited a school",
+            "They stayed in bed"
+          ],
+          "answer": 1,
+          "explanation": "周六早上他们爬了村后的小山。"
+        },
+        {
+          "id": "q3",
+          "prompt": "What did the old woman tell them about?",
+          "options": [
+            "The weather next week",
+            "The village forty years ago",
+            "Her favourite food",
+            "The best road to the city"
+          ],
+          "answer": 1,
+          "explanation": "她讲的是村子四十年前的样子：没有路，也没有游客。"
+        }
+      ]
+    },
+    {
+      "slug": "b1-how-sleep-affects-learning",
+      "title": "How Sleep Affects Learning",
+      "title_zh": "睡眠如何影响学习",
+      "level": "B1",
+      "topic": "科学与健康",
+      "goals": ["cet4", "cet6", "kaoyan", "ielts", "toefl"],
+      "minutes": 6,
+      "source": "原创示例（非官方真题）",
+      "paragraphs": [
+        {
+          "en": "Students often treat sleep as the first thing they can give up when they are busy. They stay up late to finish homework or to review vocabulary, believing that more hours of study must produce better results. Research suggests the opposite: sleep is not a break from learning, but part of it.",
+          "zh": "忙碌的时候，学生常把睡眠当作最先可以牺牲的东西。他们熬夜写完作业或复习单词，相信学习时间越长成绩就越好。研究却指向相反的结论：睡眠不是学习的间歇，而是学习的一部分。"
+        },
+        {
+          "en": "During the day, new information is stored in the brain in a temporary form. While we sleep, the brain replays and reorganizes this information, moving the important parts into long-term memory. This process is especially active during deep sleep. If sleep is cut short, the transfer is incomplete, and material that seemed familiar at midnight may be gone by the morning.",
+          "zh": "白天，新信息以临时形式存储在大脑里。睡眠时，大脑会重放并重新整理这些信息，把重要的部分转入长期记忆。这个过程在深度睡眠时尤其活跃。如果睡眠被压缩，这种转移就不完整，午夜时分还觉得熟悉的内容，到早上可能就消失了。"
+        },
+        {
+          "en": "Sleep also affects attention. After a short night, people react more slowly and make more mistakes on tasks that require concentration. A student who studies for three extra hours but loses two hours of sleep may remember less than a student who stops earlier and sleeps well.",
+          "zh": "睡眠还影响注意力。睡眠不足之后，人们反应更慢，在需要专注的任务上出错更多。一个多学三小时却少睡两小时的学生，记住的东西可能反而比早一点停下、睡得好的人更少。"
+        },
+        {
+          "en": "This does not mean that sleep can replace study. Nobody learns a language by sleeping. It means that sleep and study work together. A practical rule is simple: review difficult material in the evening, sleep, and look at it again in the morning. Many learners are surprised by how much they already know.",
+          "zh": "这并不意味着睡眠可以代替学习——没有人靠睡觉学会一门语言。它意味着睡眠与学习是配合的。一条实用的规则很简单：晚上复习难的材料，然后睡觉，早上再看一遍。很多学习者会惊讶地发现自己已经记住了不少。"
+        }
+      ],
+      "questions": [
+        {
+          "id": "q1",
+          "prompt": "What is the main idea of the text?",
+          "options": [
+            "Students should study later every night",
+            "Sleep is part of learning, not a break from it",
+            "Sleep can replace study if it is long enough",
+            "Vocabulary is the most important part of a language"
+          ],
+          "answer": 1,
+          "explanation": "第一段点明主旨：睡眠不是学习的间歇，而是学习的一部分。"
+        },
+        {
+          "id": "q2",
+          "prompt": "What happens during deep sleep, according to the text?",
+          "options": [
+            "The brain moves important information into long-term memory",
+            "The brain stops working completely",
+            "New information is deleted",
+            "People dream about vocabulary"
+          ],
+          "answer": 0,
+          "explanation": "第二段说深度睡眠时大脑把重要信息转入长期记忆。"
+        },
+        {
+          "id": "q3",
+          "prompt": "What practical rule does the writer suggest?",
+          "options": [
+            "Study only in the morning",
+            "Review in the evening, sleep, and check again in the morning",
+            "Sleep eight hours before an exam and study nothing",
+            "Never review the same material twice"
+          ],
+          "answer": 1,
+          "explanation": "最后一段给出的规则是：晚上复习、睡觉、早上再看一遍。"
+        },
+        {
+          "id": "q4",
+          "prompt": "Which statement would the writer most probably agree with?",
+          "options": [
+            "Sleep can replace study",
+            "Sleep and study support each other",
+            "Attention is not related to sleep",
+            "Longer study hours always mean better results"
+          ],
+          "answer": 1,
+          "explanation": "文章既否定“睡眠替代学习”，也否定“时间越长越好”，主张两者配合。"
+        }
+      ]
+    },
+    {
+      "slug": "b1-the-rise-of-remote-work",
+      "title": "The Rise of Remote Work",
+      "title_zh": "远程办公的兴起",
+      "level": "B1",
+      "topic": "社会与工作",
+      "goals": ["cet6", "kaoyan", "ielts", "toefl", "general"],
+      "minutes": 6,
+      "source": "原创示例（非官方真题）",
+      "paragraphs": [
+        {
+          "en": "Twenty years ago, working from home was unusual. Most employees travelled to an office every morning and stayed there until evening. Today, millions of people do at least part of their work from a kitchen table, a library, or another city.",
+          "zh": "二十年前，在家办公很少见。大多数员工每天早上通勤到办公室，一直待到傍晚。如今，数百万人至少有一部分工作是在餐桌、图书馆或另一座城市完成的。"
+        },
+        {
+          "en": "The change was made possible by technology. Fast internet connections, video meetings, and shared online documents allow teams to work together without sharing a room. When offices closed during the global health crisis, remote work stopped being an experiment and became a daily habit for many companies.",
+          "zh": "这一变化靠技术才成为可能。高速网络、视频会议和共享在线文档让团队不必共处一室也能协作。全球卫生危机期间办公室关闭，远程办公便不再是实验，而成为许多公司的日常。"
+        },
+        {
+          "en": "The advantages are easy to see. Workers save time and money on travel, and they can organize their day around their own energy. Companies can hire talented people who live far away, and they need less office space. Supporters argue that this is better for the environment as well.",
+          "zh": "好处显而易见。员工省下通勤的时间和费用，还能按自己的精力安排一天。公司可以雇用住在很远地方的人才，并且需要更少的办公场地。支持者还认为这对环境也更友好。"
+        },
+        {
+          "en": "There are disadvantages, too. Some people feel lonely without colleagues, and it is harder to learn from experienced workers when everyone is at home. New employees may find it difficult to understand the culture of a company they have never visited. Managers, meanwhile, worry about how to judge the work of people they rarely see.",
+          "zh": "缺点同样存在。有些人没有同事陪伴会感到孤独；当所有人都在家时，向有经验的同事学习也更难。新员工可能很难理解一家自己从未去过的公司的文化。而管理者则担心，如何评价那些很少见到的员工的工作。"
+        },
+        {
+          "en": "Most companies are now looking for a middle way: two or three days in the office, and the rest at home. Whatever the final arrangement, one thing is clear. The question is no longer whether people can work remotely, but how to do it well.",
+          "zh": "现在多数公司在寻找中间路线：每周到办公室两三天，其余时间在家。无论最终安排如何，有一点是清楚的：问题已不再是人们能不能远程工作，而是怎样把它做好。"
+        }
+      ],
+      "questions": [
+        {
+          "id": "q1",
+          "prompt": "What made remote work possible, according to the text?",
+          "options": [
+            "Cheaper houses in the countryside",
+            "Technology such as fast internet and video meetings",
+            "New government laws",
+            "Longer holidays"
+          ],
+          "answer": 1,
+          "explanation": "第二段明确指出是技术让远程协作成为可能。"
+        },
+        {
+          "id": "q2",
+          "prompt": "Which of the following is mentioned as an advantage?",
+          "options": [
+            "Workers save time and money on travel",
+            "Everyone earns more money",
+            "Offices become more beautiful",
+            "Meetings become shorter"
+          ],
+          "answer": 0,
+          "explanation": "第三段列举的好处包括省下通勤的时间和费用。"
+        },
+        {
+          "id": "q3",
+          "prompt": "Which problem is mentioned in the text?",
+          "options": [
+            "Computers are too expensive",
+            "Some people feel lonely without colleagues",
+            "Internet is not fast enough anywhere",
+            "Nobody wants to work any more"
+          ],
+          "answer": 1,
+          "explanation": "第四段提到缺少同事陪伴会让人感到孤独等问题。"
+        },
+        {
+          "id": "q4",
+          "prompt": "What are most companies looking for now?",
+          "options": [
+            "A complete return to the office",
+            "A middle way between office and home",
+            "An end to all meetings",
+            "A four-day working week"
+          ],
+          "answer": 1,
+          "explanation": "最后一段说多数公司在寻找“中间路线”。"
+        }
+      ]
+    }
+  ]
+}

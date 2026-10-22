@@ -20,6 +20,9 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+TESTS_DIR = Path(__file__).resolve().parent
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
 
 TMP_DIR = BACKEND_DIR / "tests" / ".tmp-enrich"
 if TMP_DIR.exists():
@@ -47,7 +50,9 @@ atexit.register(_cleanup)
 with TestClient(app) as _boot:
     _boot.get("/api/health")
 
-client = TestClient(app)
+from testkit import AuthClient  # noqa: E402  引入 Cookie 会话后默认以登录用户运行
+
+client = AuthClient(app)  # 写请求自动带 CSRF 头；词库/词书相关用例照常运行
 
 REAL_DB = Path(r"D:\data\cet4.db")
 WORDS_JSON = BACKEND_DIR / "app" / "data" / "cet4_words.json"

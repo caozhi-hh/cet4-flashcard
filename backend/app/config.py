@@ -21,6 +21,8 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path("/data") if Path("/data").exists() else BASE_DIR / "data"
 DB_PATH = DATA_DIR / "cet4.db"
 WORDS_JSON = BASE_DIR / "data" / "cet4_words.json"
+# 分级阅读文章（本项目原创示例）：跟着代码走，不受 /data 数据目录影响
+READING_JSON = BASE_DIR / "data" / "reading_articles.json"
 
 # === 数据库 ===
 DATABASE_URL = f"sqlite:///{DB_PATH}"
@@ -34,6 +36,23 @@ AI_MODEL = os.getenv("AI_MODEL", "glm-4-flash")
 DAILY_NEW_WORDS = 20       # 每天新学单词数
 KNOW_THRESHOLD = 3         # 连续认识几次标记为 known
 REVIEW_INTERVALS = [1, 1, 3, 7, 14]  # 复习间隔（天）：随记忆加深间隔变长
+
+# === 认证 / 会话 ===
+SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "cet4_session")
+CSRF_COOKIE_NAME = os.getenv("CSRF_COOKIE_NAME", "cet4_csrf")
+CSRF_HEADER_NAME = "x-csrf-token"
+SESSION_TTL_DAYS = int(os.getenv("SESSION_TTL_DAYS", "30"))
+# Cookie Secure 策略：auto=按请求协议自动判定；1=强制 Secure；0=强制关闭（纯 http 本地开发）
+COOKIE_SECURE_MODE = os.getenv("COOKIE_SECURE", "auto").strip().lower()
+COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax").strip().lower()
+# 管理接口令牌（/api/words/init 之类）。未设置时该接口一律 403，默认不对公众开放
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+
+# === AI 接口限流（内存滑窗，按登录用户计数；0 表示不限）===
+# AI 有真实成本：仅靠"必须登录"挡不住单账号刷调用，上线前先加一道最简闸门
+AI_MNEMONIC_LIMIT = int(os.getenv("AI_MNEMONIC_LIMIT", "30"))    # 记忆口诀：次/小时/人
+AI_WORDBOOK_LIMIT = int(os.getenv("AI_WORDBOOK_LIMIT", "5"))     # AI 生成词书：次/小时/人
+AI_RATE_WINDOW_SECONDS = int(os.getenv("AI_RATE_WINDOW_SECONDS", "3600"))
 
 # === CORS ===
 # 合并部署同源不需要 CORS，这里保留兼容本地 dev（前端 3000 → 后端 8000）

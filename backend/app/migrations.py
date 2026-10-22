@@ -33,6 +33,15 @@ WORD_ENRICHMENT_COLUMNS: dict[str, str] = {
     "oxford": "INTEGER",
 }
 
+# 需要按用户隔离的表：列名 → 类型（NULL = 多用户改造前的遗留数据，对任何用户都不可见）
+USER_SCOPED_COLUMNS: dict[str, dict[str, str]] = {
+    "study_records": {"user_id": "INTEGER"},
+    "custom_wordbooks": {"user_id": "INTEGER"},
+    "starred_words": {"user_id": "INTEGER"},
+}
+
+DAILY_STATS_UNIQUE_NAME = "uq_daily_stats_user_date"
+
 
 def _db_file(engine: Engine) -> Path | None:
     """从引擎 URL 反推 SQLite 文件路径；内存库返回 None"""
@@ -108,12 +117,14 @@ def ensure_columns(
     table: str,
     specs: dict[str, str],
     backup_dir: Path | None = None,
+    skip_backup: bool = False,
 ) -> dict:
     """确保 table 具备 specs 里声明的列（缺失的用 ALTER TABLE ADD COLUMN 补上）。
 
     返回 {"added_columns": [...], "backed_up": str | None}
     只追加列：不改既有列类型、不删列、不动任何行；首次新增前先备份一次。
     幂等：列齐了直接返回，不备份也不改结构。
+    skip_backup=True 供"调用方已统一备份过"的场景使用，避免一次迁移产生多个备份文件。
     """
     columns = _table_columns(engine, table)
     if not columns:
@@ -124,7 +135,7 @@ def ensure_columns(
     if not missing:
         return {"added_columns": [], "backed_up": None}
 
-    backed_up = _backup_once(engine, backup_dir)
+    backed_up = None if skip_backup else _backup_once(engine, backup_dir)
     with engine.begin() as conn:
         for name in missing:
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {specs[name]}"))
@@ -153,3 +164,167 @@ def ensure_word_enrichment_schema(engine: Engine, backup_dir: Path | None = None
     """
     result = ensure_columns(engine, "words", WORD_ENRICHMENT_COLUMNS, backup_dir)
     return {"added_columns": result["added_columns"], "backed_up": result["backed_up"]}
+
+
+def _daily_stats_has_user_id(engine: Engine) -> bool:
+    return "user_id" in _table_columns(engine, "daily_stats")
+
+
+def _rebuild_daily_stats(engine: Engine) -> int:
+    """重建 daily_stats，把 UNIQUE(date) 换成 UNIQUE(user_id, date)，返回保留的行数
+
+    SQLite 不能直接改约束，只能"建新表 → 完整拷贝 → 换名"。
+    - 拷贝时显式写出每一列，主键 id 一并保留（行身份不变）；
+    - user_id 一律写 NULL：遗留统计**不归属任何用户**，
+      SQLite 中 NULL 互不相等，因此多行 NULL 不会撞唯一约束，也不会被任何用户查询到。
+    - id 用 INSERT 显式写入，所以 AUTOINCREMENT 序列会被 SQLite 自动抬到 max(id) 之上。
+    """
+    with engine.begin() as conn:
+        conn.execute(text(
+            f"""
+            CREATE TABLE daily_stats_new (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                date VARCHAR(10) NOT NULL,
+                user_id INTEGER,
+                new_words INTEGER DEFAULT 0,
+                reviewed_words INTEGER DEFAULT 0,
+                quiz_score INTEGER DEFAULT 0,
+                quiz_total INTEGER DEFAULT 0,
+                streak_days INTEGER DEFAULT 0,
+                CONSTRAINT {DAILY_STATS_UNIQUE_NAME} UNIQUE (user_id, date)
+            )
+            """
+        ))
+        before = conn.execute(text("SELECT COUNT(*) FROM daily_stats")).scalar() or 0
+        conn.execute(text(
+            """
+            INSERT INTO daily_stats_new
+                (id, date, user_id, new_words, reviewed_words, quiz_score, quiz_total, streak_days)
+            SELECT id, date, NULL, new_words, reviewed_words, quiz_score, quiz_total, streak_days
+            FROM daily_stats
+            """
+        ))
+        after = conn.execute(text("SELECT COUNT(*) FROM daily_stats_new")).scalar() or 0
+        if int(after) != int(before):
+            raise RuntimeError(f"daily_stats 重建拷贝行数不一致：{before} -> {after}，已中止")
+        conn.execute(text("DROP TABLE daily_stats"))
+        conn.execute(text("ALTER TABLE daily_stats_new RENAME TO daily_stats"))
+    return int(after)
+
+
+def ensure_user_scope_schema(engine: Engine, backup_dir: Path | None = None) -> dict:
+    """为用户隔离做结构迁移
+
+    返回 {"added_columns": {表: [列]}, "daily_stats_rebuilt": bool,
+          "daily_stats_rows": int | None, "backed_up": str | None}
+
+    顺序：先判断是否真的需要改 → 需要则**统一备份一次** → 加列 → 重建 daily_stats。
+    幂等：daily_stats 已有 user_id 即整体视为已迁移（其余表同步检查）。
+    """
+    needs_columns = any(
+        name not in _table_columns(engine, table)
+        for table, specs in USER_SCOPED_COLUMNS.items()
+        for name in specs
+    )
+    needs_rebuild = bool(_table_columns(engine, "daily_stats")) and not _daily_stats_has_user_id(engine)
+
+    if not needs_columns and not needs_rebuild:
+        return {"added_columns": {}, "daily_stats_rebuilt": False, "daily_stats_rows": None, "backed_up": None}
+
+    backed_up = _backup_once(engine, backup_dir)
+
+    added: dict[str, list[str]] = {}
+    for table, specs in USER_SCOPED_COLUMNS.items():
+        result = ensure_columns(engine, table, specs, skip_backup=True)
+        if result["added_columns"]:
+            added[table] = result["added_columns"]
+
+    rows: int | None = None
+    if needs_rebuild:
+        rows = _rebuild_daily_stats(engine)
+        logger.info(f"daily_stats 已重建为 UNIQUE(user_id, date)，保留 {rows} 行（user_id 均为 NULL）")
+
+    return {
+        "added_columns": added,
+        "daily_stats_rebuilt": needs_rebuild,
+        "daily_stats_rows": rows,
+        "backed_up": backed_up,
+    }
+
+
+STUDY_PLAN_TABLE = "study_plans"
+
+
+def ensure_study_plan_schema(engine: Engine, backup_dir: Path | None = None) -> dict:
+    """确保 study_plans 表存在（学习计划功能）
+
+    只**新建一张表**：不碰任何已有表、不增删任何行，因此不存在历史数据被改动或
+    被分配给其他用户的风险。建表前先备份（沿用备份优先原则）。
+    幂等：表已存在（含全新库由 create_all 建好的情况）直接返回。
+
+    返回 {"created_table": bool, "backed_up": str | None}
+    """
+    if _table_columns(engine, STUDY_PLAN_TABLE):
+        return {"created_table": False, "backed_up": None}
+
+    backed_up = _backup_once(engine, backup_dir)
+    with engine.begin() as conn:
+        conn.execute(text(
+            f"""
+            CREATE TABLE {STUDY_PLAN_TABLE} (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                goal_type VARCHAR(32) NOT NULL,
+                wordbook_key VARCHAR(64) NOT NULL,
+                target_date VARCHAR(10),
+                daily_new_words INTEGER NOT NULL DEFAULT 20,
+                created_at VARCHAR(30),
+                updated_at VARCHAR(30)
+            )
+            """
+        ))
+        # 与 ORM（user_id: unique=True, index=True）一致：唯一索引，保证每个用户只有一份生效计划
+        conn.execute(text(
+            f"CREATE UNIQUE INDEX ix_{STUDY_PLAN_TABLE}_user_id ON {STUDY_PLAN_TABLE} (user_id)"
+        ))
+    logger.info(f"{STUDY_PLAN_TABLE} 表已创建（备份：{backed_up}）")
+    return {"created_table": True, "backed_up": backed_up}
+
+
+READING_TABLE = "reading_attempts"
+
+
+def ensure_reading_schema(engine: Engine, backup_dir: Path | None = None) -> dict:
+    """确保 reading_attempts 表存在（分级阅读的答题记录）
+
+    同样只**新建一张表**：不动任何已有表与行；建表前先备份；幂等。
+    返回 {"created_table": bool, "backed_up": str | None}
+    """
+    if _table_columns(engine, READING_TABLE):
+        return {"created_table": False, "backed_up": None}
+
+    backed_up = _backup_once(engine, backup_dir)
+    with engine.begin() as conn:
+        conn.execute(text(
+            f"""
+            CREATE TABLE {READING_TABLE} (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                slug VARCHAR(64) NOT NULL,
+                level VARCHAR(8),
+                score INTEGER NOT NULL DEFAULT 0,
+                total INTEGER NOT NULL DEFAULT 0,
+                duration_seconds INTEGER DEFAULT 0,
+                completed_at VARCHAR(30),
+                created_at VARCHAR(30)
+            )
+            """
+        ))
+        # 查询都按 (user_id) 与 (slug) 走
+        conn.execute(text(f"CREATE INDEX ix_{READING_TABLE}_user_id ON {READING_TABLE} (user_id)"))
+        conn.execute(text(f"CREATE INDEX ix_{READING_TABLE}_slug ON {READING_TABLE} (slug)"))
+        conn.execute(
+            text(f"CREATE INDEX ix_{READING_TABLE}_completed_at ON {READING_TABLE} (completed_at)")
+        )
+    logger.info(f"{READING_TABLE} 表已创建（备份：{backed_up}）")
+    return {"created_table": True, "backed_up": backed_up}

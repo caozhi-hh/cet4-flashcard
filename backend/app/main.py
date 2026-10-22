@@ -10,8 +10,16 @@ from fastapi.responses import FileResponse
 
 from .config import CORS_ORIGINS, DB_PATH
 from .database import Base, engine
-from .migrations import FSRS_COLUMN, ensure_fsrs_schema, ensure_word_enrichment_schema
-from .routers import ai, progress, quiz, starred, study, wordbooks, words
+from .auth import csrf_middleware
+from .migrations import (
+    FSRS_COLUMN,
+    ensure_fsrs_schema,
+    ensure_reading_schema,
+    ensure_study_plan_schema,
+    ensure_user_scope_schema,
+    ensure_word_enrichment_schema,
+)
+from .routers import ai, auth, plan, progress, quiz, reading, starred, study, wordbooks, words
 from .services.word_service import backfill_word_enrichment, init_words
 from .database import SessionLocal
 
@@ -42,6 +50,22 @@ async def lifespan(app: FastAPI):
     enrich = ensure_word_enrichment_schema(engine)
     if enrich["added_columns"]:
         logger.info(f"已为 words 增加列：{enrich['added_columns']}（备份：{enrich['backed_up']}）")
+    # 用户隔离：个人数据表加 user_id，daily_stats 唯一约束改为 (user_id, date)
+    scoped = ensure_user_scope_schema(engine)
+    if scoped["added_columns"] or scoped["daily_stats_rebuilt"]:
+        logger.info(
+            f"用户隔离迁移完成：加列 {scoped['added_columns']}，"
+            f"daily_stats 重建={scoped['daily_stats_rebuilt']}（保留 {scoped['daily_stats_rows']} 行），"
+            f"备份：{scoped['backed_up']}"
+        )
+    # 学习计划表：只新建一张表，不动任何已有表与数据
+    plan_schema = ensure_study_plan_schema(engine)
+    if plan_schema["created_table"]:
+        logger.info(f"已创建 study_plans 表（备份：{plan_schema['backed_up']}）")
+    # 分级阅读记录表：同样只新建一张表
+    reading_schema = ensure_reading_schema(engine)
+    if reading_schema["created_table"]:
+        logger.info(f"已创建 reading_attempts 表（备份：{reading_schema['backed_up']}）")
     db = SessionLocal()
     try:
         count = init_words(db)
@@ -58,7 +82,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="腰子背单词", version="1.0.0", lifespan=lifespan)
 
+# CSRF 中间件先注册：Starlette 的 add_middleware 是"前插"，所以后注册的 CORS 会位于最外层，
+# 这样被 CSRF 拦下的 403 响应也能带上 CORS 头，浏览器才读得到真实状态码
+app.middleware("http")(csrf_middleware)
+
 # CORS（合并部署同源不需要，保留兼容本地 dev 跨端口）
+# allow_credentials=True 是 Cookie 认证的前提；配合白名单而不是 "*"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -68,6 +97,9 @@ app.add_middleware(
 )
 
 # 注册 API 路由（必须先注册，优先于下面的 SPA 兜底）
+app.include_router(auth.router)
+app.include_router(plan.router)
+app.include_router(reading.router)
 app.include_router(words.router)
 app.include_router(wordbooks.router)
 app.include_router(study.router)
