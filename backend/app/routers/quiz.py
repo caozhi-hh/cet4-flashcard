@@ -28,5 +28,8 @@ def submit_quiz(
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ):
-    """提交测验答案（错题只影响当前用户的学习进度）"""
-    return quiz_service.check_answers(db, user.id, submit.answers)
+    """提交测验答案（错题只影响当前用户的学习进度）
+
+    客户端只提交题号与作答；正确答案与得分都由服务端依据词库数据计算。
+    """
+    return quiz_service.check_answers(db, user.id, [a.model_dump() for a in submit.answers])

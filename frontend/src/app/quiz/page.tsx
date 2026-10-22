@@ -59,7 +59,7 @@ export default function QuizPage() {
     const payload = questions.map((q) => ({
       word_id: q.word_id,
       answer: answers[q.word_id] || "",
-      correct_answer: q.correct_answer,
+      // 不再回传 correct_answer：正确答案由服务端掌握，前端也没有它
     }));
 
     try {

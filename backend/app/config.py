@@ -48,6 +48,12 @@ COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax").strip().lower()
 # 管理接口令牌（/api/words/init 之类）。未设置时该接口一律 403，默认不对公众开放
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
+# === AI 接口限流（内存滑窗，按登录用户计数；0 表示不限）===
+# AI 有真实成本：仅靠"必须登录"挡不住单账号刷调用，上线前先加一道最简闸门
+AI_MNEMONIC_LIMIT = int(os.getenv("AI_MNEMONIC_LIMIT", "30"))    # 记忆口诀：次/小时/人
+AI_WORDBOOK_LIMIT = int(os.getenv("AI_WORDBOOK_LIMIT", "5"))     # AI 生成词书：次/小时/人
+AI_RATE_WINDOW_SECONDS = int(os.getenv("AI_RATE_WINDOW_SECONDS", "3600"))
+
 # === CORS ===
 # 合并部署同源不需要 CORS，这里保留兼容本地 dev（前端 3000 → 后端 8000）
 # 生产用自定义域名时，自动加入（环境变量 SITE_URL）

@@ -51,20 +51,27 @@ class StudyRecordOut(BaseModel):
 class QuizQuestion(BaseModel):
     word_id: int
     word: str
-    quiz_type: str           # choice / fill
+    quiz_type: str           # choice / listen / spell
     question: str
     options: list[str] | None = None
-    correct_answer: str
     hint: str | None = None  # 填空题提示
+    # 注意：**没有 correct_answer**。答案留在服务端，判分依据词库数据完成。
+
+
+class QuizAnswerIn(BaseModel):
+    """一道题的作答：只提交题号与答案，客户端无法提供"正确答案"来影响判分"""
+    word_id: int
+    answer: str = ""
 
 
 class QuizSubmit(BaseModel):
-    answers: list[dict]      # [{"word_id": 1, "answer": "xxx"}]
+    answers: list[QuizAnswerIn]
 
 
 class QuizResult(BaseModel):
     score: int
     total: int
+    unanswered: int = 0
     wrong_words: list[WordOut]
 
 

@@ -199,7 +199,8 @@ export const studyApi = {
 /** 测验 */
 export const quizApi = {
   getDaily: () => request<{ questions: QuizQuestion[]; total: number }>("/api/quiz/daily"),
-  submit: (answers: { word_id: number; answer: string; correct_answer: string }[]) =>
+  // 只提交题号与作答：正确答案在服务端，前端不再传递、也无法影响判分
+  submit: (answers: { word_id: number; answer: string }[]) =>
     request<QuizResult>("/api/quiz/submit", {
       method: "POST",
       body: JSON.stringify({ answers }),

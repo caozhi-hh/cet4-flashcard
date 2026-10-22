@@ -207,13 +207,14 @@ export interface QuizQuestion {
   quiz_type: "choice" | "fill" | "listen" | "spell";
   question: string;
   options?: string[];
-  correct_answer: string;
   hint?: string;
+  // 注意：服务端**不下发**正确答案，判分在服务端完成
 }
 
 export interface QuizResult {
   score: number;
   total: number;
+  unanswered?: number;
   wrong_words: Word[];
 }
 

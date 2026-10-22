@@ -13,9 +13,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..auth import current_user_optional, require_user
+from ..config import AI_RATE_WINDOW_SECONDS, AI_WORDBOOK_LIMIT
 from ..database import get_db
 from ..models import CustomWordbook, User, Word
 from ..services.ai_service import generate_wordbook_config, generate_wordbook_words, refine_word_selection
+from ..services.rate_limit import ai_rate_limit
 from ..wordbook_config import WORDBOOK_DEFS, apply_custom_filter, get_preset_filter
 
 router = APIRouter(prefix="/api/wordbooks", tags=["wordbooks"])
@@ -122,13 +124,16 @@ class AIGenerateIn(BaseModel):
     query: str
 
 
-@router.post("/ai-generate")
+@router.post(
+    "/ai-generate",
+    dependencies=[Depends(ai_rate_limit("ai_wordbook", AI_WORDBOOK_LIMIT, AI_RATE_WINDOW_SECONDS))],
+)
 async def ai_generate(
     req: AIGenerateIn,
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ):
-    """AI 根据需求直接生成主题单词书（归属当前用户）
+    """AI 根据需求直接生成主题单词书（归属当前用户；需登录 + 限流）
 
     流程：AI 直接列出主题相关四级词 → 匹配词库 → 存 word_ids
     （若 AI 列词为空，fallback 到粗筛+精选两阶段）

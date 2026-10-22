@@ -18,6 +18,9 @@ backend/app/.env
 **/cet4.db-journal
 /data/
 
+# 数据文件的历史备份（运行时不需要，省镜像体积）
+**/*.bak-*
+
 # 版本控制与编辑器
 .git
 .gitignore
