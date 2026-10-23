@@ -16,6 +16,7 @@ openai>=1.0.0
 fsrs>=6.0.0
 
 # 密码哈希（Argon2id）——auth.py 启动即导入，缺了容器会直接起不来
+# （origin/main 的 0ae6a835 / PR#1 补上了这条；合并后保留同样的版本约束）
 argon2-cffi>=23.1.0
 
 # PostgreSQL 驱动（Render + Neon 生产用；本地 SQLite 开发也会装上，不影响现有功能）
