@@ -1,12 +1,18 @@
 """数据库结构迁移
 
-目前只有一步：给 study_records 加 FSRS 卡片状态列，并回填历史记录。
-
 安全原则（重要）：
     1. 只做 ADD COLUMN 和 NULL 回填，绝不 DROP 列、绝不删除行、绝不改既有列类型。
     2. 动结构前必须先成功备份数据库；备份失败就拒绝迁移（宁可不动，也不能没备份就改）。
     3. 幂等：列已存在直接返回，不重复加列、不重复回填。
     4. 备份用 sqlite3 的在线备份 API，而不是复制文件——WAL 模式下文件复制可能拿到不一致的快照。
+
+方言差异（SQLite / PostgreSQL）：
+    - 这些 ensure_* 函数原本是为**已有 SQLite 库**做就地升级而写的（PRAGMA、ALTER TABLE、
+      重建表换约束、sqlite3 备份）。
+    - PostgreSQL（Render + Neon）是全新库：表结构由 `Base.metadata.create_all` 按模型一次建好，
+      因此**不对 PostgreSQL 执行任何 SQLite 专有动作**（不 PRAGMA、不 sqlite3 备份、不重建表）。
+    - 若 PostgreSQL 里已存在的表缺少模型要求的列/约束，本模块**明确抛错并停止**，
+      不会静默改结构——需要人工审查后执行迁移（见 verify_schema）。
 
 备份位置：默认放在数据库文件同级的 backups/ 目录；可用环境变量 CET4_BACKUP_DIR 覆盖。
 """
@@ -23,6 +29,15 @@ logger = logging.getLogger(__name__)
 
 FSRS_COLUMN = "fsrs_card"
 BACKUP_ENV = "CET4_BACKUP_DIR"
+
+
+class SchemaMigrationRequired(RuntimeError):
+    """PostgreSQL 上检测到结构落后于模型，需要人工审查后迁移（不自动改）"""
+
+
+def is_sqlite(engine: Engine) -> bool:
+    """是否 SQLite 方言（备份、PRAGMA、重建表等只对 SQLite 有效）"""
+    return engine.dialect.name == "sqlite"
 
 # words 表的 ECDICT 富化列：列名 → SQLite 类型
 WORD_ENRICHMENT_COLUMNS: dict[str, str] = {
@@ -44,7 +59,14 @@ DAILY_STATS_UNIQUE_NAME = "uq_daily_stats_user_date"
 
 
 def _db_file(engine: Engine) -> Path | None:
-    """从引擎 URL 反推 SQLite 文件路径；内存库返回 None"""
+    """从引擎 URL 反推 SQLite 文件路径；**非 SQLite 一律返回 None**
+
+    必须显式判方言：PostgreSQL 的 `engine.url.database` 是数据库名（如 neondb），
+    不是文件路径。若照旧解析，会拿数据库名当成本地文件去"备份"。
+    内存库同样返回 None。
+    """
+    if not is_sqlite(engine):
+        return None
     database = engine.url.database
     if not database or database == ":memory:":
         return None
@@ -74,9 +96,98 @@ def _backup_database(db_file: Path, backup_dir: Path) -> Path:
 
 
 def _table_columns(engine: Engine, table: str) -> list[str]:
+    """读取表的列名；按方言选查询方式（SQLite: PRAGMA，PG: information_schema）"""
+    if is_sqlite(engine):
+        with engine.connect() as conn:
+            rows = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+        return [row[1] for row in rows]
+
     with engine.connect() as conn:
-        rows = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
-    return [row[1] for row in rows]
+        rows = conn.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = current_schema() AND table_name = :t "
+                "ORDER BY ordinal_position"
+            ),
+            {"t": table},
+        ).fetchall()
+    return [row[0] for row in rows]
+
+
+def _pg_index_defs(engine: Engine, table: str) -> list[str]:
+    """PostgreSQL：读取表的索引定义（用于校验唯一约束是否存在）"""
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT indexdef FROM pg_indexes "
+                "WHERE schemaname = current_schema() AND tablename = :t"
+            ),
+            {"t": table},
+        ).fetchall()
+    return [row[0] or "" for row in rows]
+
+
+def _create_table_via_metadata(engine: Engine, table_name: str) -> None:
+    """用 SQLAlchemy 元数据建表（方言正确：PG 用序列/IDENTITY，SQLite 用 AUTOINCREMENT）
+
+    非 SQLite 环境下不用手写 DDL，避免写出 SQLite 专有语法。
+    """
+    from . import models  # noqa: F401  确保模型已注册到 metadata
+    from .database import Base
+
+    table = Base.metadata.tables.get(table_name)
+    if table is None:
+        raise RuntimeError(f"模型里找不到表 {table_name}，无法建表")
+    Base.metadata.create_all(bind=engine, tables=[table])
+
+
+def verify_schema(engine: Engine) -> dict:
+    """校验 PostgreSQL 结构是否与模型一致；不一致则**抛错停止**（不自动改）
+
+    只在非 SQLite 上执行：全新库由 create_all 建好，本函数是个安全网——
+    若线上库落后于模型（缺少列或缺少 daily_stats 的唯一约束），
+    宁可启动失败也不要静默改结构、更不能带着错结构继续跑。
+
+    返回 {"checked_tables": int}
+    """
+    if is_sqlite(engine):
+        return {"checked_tables": 0}
+
+    from . import models  # noqa: F401
+    from .database import Base
+
+    problems: list[str] = []
+    checked = 0
+    for table_name, table in Base.metadata.tables.items():
+        actual = _table_columns(engine, table_name)
+        if not actual:
+            problems.append(f"缺少表 {table_name}（应先由 create_all 建表）")
+            continue
+        checked += 1
+        expected = {c.name for c in table.columns}
+        missing = sorted(expected - set(actual))
+        if missing:
+            problems.append(
+                f"{table_name} 缺少列 {missing}；请人工审查后执行 "
+                f"ALTER TABLE {table_name} ADD COLUMN ...（本服务不会自动改结构）"
+            )
+
+    # daily_stats 的 UNIQUE(user_id, date) 是并发安全的依据，单列 date 唯一会让第二个用户当天写不进去
+    index_defs = _pg_index_defs(engine, "daily_stats")
+    if _table_columns(engine, "daily_stats") and not any(
+        "unique" in d.lower() and "user_id" in d and "date" in d for d in index_defs
+    ):
+        problems.append(
+            "daily_stats 缺少 UNIQUE(user_id, date) 约束（当前只有 date 唯一会导致多用户冲突）；"
+            "请人工审查后重建该约束，本服务不会自动改"
+        )
+
+    if problems:
+        raise SchemaMigrationRequired(
+            "PostgreSQL 结构落后于模型，已停止启动以避免静默改结构：\n  - " + "\n  - ".join(problems)
+        )
+    logger.info(f"PostgreSQL 结构校验通过（{checked} 张表）")
+    return {"checked_tables": checked}
 
 
 def backfill_fsrs_cards(engine: Engine) -> int:
@@ -102,7 +213,10 @@ def backfill_fsrs_cards(engine: Engine) -> int:
 
 
 def _backup_once(engine: Engine, backup_dir: Path | None) -> str | None:
-    """动结构前备份一次；数据库文件不存在（内存库等）就跳过"""
+    """动结构前备份一次；SQLite 之外一律跳过（PG 不是文件库，也绝不对它跑 sqlite3 备份）"""
+    if not is_sqlite(engine):
+        logger.info("非 SQLite 后端：跳过文件级备份（PostgreSQL 请用平台自带备份/PITR）")
+        return None
     db_file = _db_file(engine)
     if not (db_file and db_file.exists()):
         return None
@@ -134,6 +248,14 @@ def ensure_columns(
     missing = [name for name in specs if name not in columns]
     if not missing:
         return {"added_columns": [], "backed_up": None}
+
+    if not is_sqlite(engine):
+        # PostgreSQL：不在这里做就地 ALTER（没有文件级备份可依赖，改动需要人工审查）
+        raise SchemaMigrationRequired(
+            f"{table} 缺少列 {sorted(missing)}（PostgreSQL 不做自动迁移）。"
+            f"请在审查后手工执行："
+            + "；".join(f"ALTER TABLE {table} ADD COLUMN {n} {specs[n]}" for n in missing)
+        )
 
     backed_up = None if skip_backup else _backup_once(engine, backup_dir)
     with engine.begin() as conn:
@@ -179,6 +301,12 @@ def _rebuild_daily_stats(engine: Engine) -> int:
       SQLite 中 NULL 互不相等，因此多行 NULL 不会撞唯一约束，也不会被任何用户查询到。
     - id 用 INSERT 显式写入，所以 AUTOINCREMENT 序列会被 SQLite 自动抬到 max(id) 之上。
     """
+    if not is_sqlite(engine):
+        # PostgreSQL 不能这样换约束；全新库由模型的 UniqueConstraint 直接建好
+        raise SchemaMigrationRequired(
+            "daily_stats 重建只适用于 SQLite；PostgreSQL 请在审查后手工重建唯一约束"
+        )
+
     with engine.begin() as conn:
         conn.execute(text(
             f"""
@@ -220,7 +348,18 @@ def ensure_user_scope_schema(engine: Engine, backup_dir: Path | None = None) -> 
 
     顺序：先判断是否真的需要改 → 需要则**统一备份一次** → 加列 → 重建 daily_stats。
     幂等：daily_stats 已有 user_id 即整体视为已迁移（其余表同步检查）。
+    PostgreSQL：交由 verify_schema 校验，缺列即明确失败，不在这里改结构。
     """
+    if not is_sqlite(engine):
+        verify_schema(engine)
+        return {
+            "added_columns": {},
+            "daily_stats_rebuilt": False,
+            "daily_stats_rows": None,
+            "backed_up": None,
+            "verified": True,
+        }
+
     needs_columns = any(
         name not in _table_columns(engine, table)
         for table, specs in USER_SCOPED_COLUMNS.items()
@@ -267,6 +406,12 @@ def ensure_study_plan_schema(engine: Engine, backup_dir: Path | None = None) -> 
     if _table_columns(engine, STUDY_PLAN_TABLE):
         return {"created_table": False, "backed_up": None}
 
+    if not is_sqlite(engine):
+        # PostgreSQL：按模型建表（方言正确，含唯一索引），不需要也不会做 sqlite 备份
+        _create_table_via_metadata(engine, STUDY_PLAN_TABLE)
+        logger.info(f"{STUDY_PLAN_TABLE} 表已按模型创建（PostgreSQL）")
+        return {"created_table": True, "backed_up": None}
+
     backed_up = _backup_once(engine, backup_dir)
     with engine.begin() as conn:
         conn.execute(text(
@@ -302,6 +447,11 @@ def ensure_reading_schema(engine: Engine, backup_dir: Path | None = None) -> dic
     """
     if _table_columns(engine, READING_TABLE):
         return {"created_table": False, "backed_up": None}
+
+    if not is_sqlite(engine):
+        _create_table_via_metadata(engine, READING_TABLE)
+        logger.info(f"{READING_TABLE} 表已按模型创建（PostgreSQL）")
+        return {"created_table": True, "backed_up": None}
 
     backed_up = _backup_once(engine, backup_dir)
     with engine.begin() as conn:

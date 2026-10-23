@@ -25,7 +25,37 @@ WORDS_JSON = BASE_DIR / "data" / "cet4_words.json"
 READING_JSON = BASE_DIR / "data" / "reading_articles.json"
 
 # === 数据库 ===
-DATABASE_URL = f"sqlite:///{DB_PATH}"
+# 优先用环境变量 DATABASE_URL（Render/Neon 的 PostgreSQL）；未设置则沿用本地 SQLite。
+# 本地开发与现有测试完全不受影响：不设这个变量就还是 sqlite:///<DB_PATH>。
+_DATABASE_URL_ENV = os.getenv("DATABASE_URL", "").strip()
+
+
+def normalize_database_url(url: str) -> str:
+    """把常见的 PostgreSQL 连接串规整成 SQLAlchemy 2.x + psycopg3 能直接用的形式
+
+    - Render/Neon 面板复制到的可能是 `postgres://...`（旧 Heroku 写法），
+      SQLAlchemy 2.x 已不再接受该 scheme；
+    - 未指定驱动时补 `+psycopg`（本项目安装的驱动）；已指定驱动的（如 `+psycopg2`）原样保留。
+    """
+    url = (url or "").strip()
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://") :]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://") :]
+    return url
+
+
+def backend_for_url(url: str) -> str:
+    """按 URL 判断数据库方言（engine 参数与迁移/备份逻辑据此分流）"""
+    return "postgresql" if (url or "").strip().startswith("postgresql") else "sqlite"
+
+
+DATABASE_URL = (
+    normalize_database_url(_DATABASE_URL_ENV) if _DATABASE_URL_ENV else f"sqlite:///{DB_PATH}"
+)
+# 方言标记：引擎参数、迁移与备份逻辑都按它分别处理
+DB_BACKEND = backend_for_url(DATABASE_URL)
+IS_SQLITE = DB_BACKEND == "sqlite"
 
 # === AI 模型(智谱 GLM,走 OpenAI 兼容接口)===
 AI_API_KEY = os.getenv("AI_API_KEY", "")

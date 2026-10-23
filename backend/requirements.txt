@@ -1,7 +1,22 @@
+# Web 框架与运行时
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
+
+# ORM 与校验
 sqlalchemy>=2.0.0
 pydantic>=2.0.0
+
+# 配置
 python-dotenv>=1.0.0
+
+# AI（智谱 GLM，OpenAI 兼容接口）
 openai>=1.0.0
+
+# FSRS-6 间隔重复
 fsrs>=6.0.0
+
+# 密码哈希（Argon2id）——auth.py 启动即导入，缺了容器会直接起不来
+argon2-cffi>=23.1.0
+
+# PostgreSQL 驱动（Render + Neon 生产用；本地 SQLite 开发也会装上，不影响现有功能）
+psycopg[binary]>=3.2.0

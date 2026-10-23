@@ -8,8 +8,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from .config import CORS_ORIGINS, DB_PATH
-from .database import Base, engine
+from .config import CORS_ORIGINS, DB_BACKEND, DB_PATH, IS_SQLITE
+from .database import Base, engine, ping
 from .auth import csrf_middleware
 from .migrations import (
     FSRS_COLUMN,
@@ -18,6 +18,7 @@ from .migrations import (
     ensure_study_plan_schema,
     ensure_user_scope_schema,
     ensure_word_enrichment_schema,
+    verify_schema,
 )
 from .routers import ai, auth, plan, progress, quiz, reading, starred, study, wordbooks, words
 from .services.word_service import backfill_word_enrichment, init_words
@@ -33,12 +34,20 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """启动时：建表 + 初始化词库"""
-    # 打印真实使用的数据库文件绝对路径。
-    # config.py 里 DATA_DIR 取 "/data"（若存在），而 Windows 上 "/data" 不是绝对路径、
-    # 会解析到"当前盘符根目录"。若从 C: 启动就会连到 C:\data\cet4.db 这个空库，
-    # 表现为"进度全没了"。把解析结果打出来，一眼可辨。
-    logger.info(f"数据库文件: {DB_PATH.resolve()}")
+    # 打印真实使用的数据库。
+    # SQLite：打印绝对路径——config 里 DATA_DIR 取 "/data"（若存在），而 Windows 上 "/data"
+    #   不是绝对路径、会解析到"当前盘符根目录"，从 C: 启动就会连到 C:\data\cet4.db 这个空库，
+    #   表现为"进度全没了"。
+    # PostgreSQL：只打印方言/主机（hide_password=True，绝不把密码写进日志）。
+    if IS_SQLITE:
+        logger.info(f"数据库文件: {DB_PATH.resolve()}")
+    else:
+        logger.info(f"数据库: {engine.url.render_as_string(hide_password=True)}")
     Base.metadata.create_all(bind=engine)
+    if not IS_SQLITE:
+        # PostgreSQL 是全新库：结构由 create_all 按模型建好；
+        # 若线上库落后于模型（缺列/缺约束），这里明确失败停止，不静默改结构。
+        verify_schema(engine)
     # 结构迁移：给历史库补上 FSRS 列（只 ADD COLUMN + 回填；改结构前会先自动备份）
     migration = ensure_fsrs_schema(engine)
     if migration["added_column"]:
@@ -111,7 +120,17 @@ app.include_router(ai.router)
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    """健康检查：附带一次数据库探活
+
+    始终返回 200（避免 Render 因数据库瞬时抖动反复重启实例），
+    但把真实状态放进 `db` 字段，便于区分"进程活着"和"数据库可用"。
+    """
+    db_ok = ping()
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "db": "ok" if db_ok else "error",
+        "backend": DB_BACKEND,
+    }
 
 
 # === 前端静态文件托管（SPA 兜底，注册在最后）===

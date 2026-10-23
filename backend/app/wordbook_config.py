@@ -23,7 +23,9 @@ def _filter_freq_range(lo, hi):
 
 def _filter_pos(pos_str):
     def _f(query, Word):
-        return query.filter(Word.pos.like(f"%{pos_str}%"))
+        # 用 ilike 而不是 like：SQLite 的 LIKE 对 ASCII 本就大小写不敏感，
+        # 而 PostgreSQL 的 LIKE 区分大小写。统一成 ilike 才能让两种后端行为一致。
+        return query.filter(Word.pos.ilike(f"%{pos_str}%"))
     return _f
 
 
@@ -32,9 +34,10 @@ def _filter_tag(tag: str):
 
     tags 存的是空格分隔的固定词表（zk gk cet4 cet6 ky toefl ielts gre），
     这些标签互不为子串（如 cet4 与 cet6 不同、ky 与 gk 不同），所以 LIKE '%tag%' 不会误匹配。
+    用 ilike 保证 SQLite 与 PostgreSQL 的大小写行为一致（PG 的 LIKE 区分大小写）。
     """
     def _f(query, Word):
-        return query.filter(Word.tags.like(f"%{tag}%"))
+        return query.filter(Word.tags.ilike(f"%{tag}%"))
     return _f
 
 
@@ -141,9 +144,9 @@ def apply_custom_filter(query, Word, keywords: list[str], pos: str = "", freq_ma
         for kw in keywords:
             kw = kw.strip()
             if kw:
-                conditions.append(Word.definition.like(f"%{kw}%"))
+                conditions.append(Word.definition.ilike(f"%{kw}%"))
                 if hasattr(Word, "example_cn") and Word.example_cn:
-                    conditions.append(Word.example_cn.like(f"%{kw}%"))
+                    conditions.append(Word.example_cn.ilike(f"%{kw}%"))
         if conditions:
             query = query.filter(or_(*conditions))
 
@@ -151,9 +154,9 @@ def apply_custom_filter(query, Word, keywords: list[str], pos: str = "", freq_ma
     if pos and pos.strip():
         pos_parts = [p.strip() for p in pos.split("/") if p.strip()]
         if len(pos_parts) == 1:
-            query = query.filter(Word.pos.like(f"%{pos_parts[0]}%"))
+            query = query.filter(Word.pos.ilike(f"%{pos_parts[0]}%"))
         elif pos_parts:
-            query = query.filter(or_(*[Word.pos.like(f"%{p}%") for p in pos_parts]))
+            query = query.filter(or_(*[Word.pos.ilike(f"%{p}%") for p in pos_parts]))
 
     # 词频上限
     if freq_max and freq_max < 4544:
