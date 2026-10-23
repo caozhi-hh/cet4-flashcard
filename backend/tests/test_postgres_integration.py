@@ -5,17 +5,28 @@
     本机不一定有 PostgreSQL，**有则跑、没有就明确标注"未执行"**，
     绝不用"SQLite 通过"冒充"PostgreSQL 通过"。
 
-用法（Neon 测试库，务必用独立测试库，不要指向生产库）：
+用法（务必用**独立测试分支/库**，不要指向生产）：
+    Neon 上推荐做法：在同一个 Neon 项目里新建一个分支（例如命名 dev-test），
+    用该分支的连接串运行本套件；绝对不要用「生产」分支的连接串。
+
     Windows PowerShell:
-        $env:TEST_DATABASE_URL="postgresql://<user>:<pw>@<host>.neon.tech/cet4_test?sslmode=require"
+        $env:TEST_DATABASE_URL="postgresql://<user>:<pw>@<test-branch-host>.neon.tech/neondb?sslmode=require"
+        $env:TEST_DB_ACK="I_UNDERSTAND_THIS_DROPS_TABLES"
         python tests/test_postgres_integration.py
     bash:
-        TEST_DATABASE_URL="postgresql://.../cet4_test?sslmode=require" python tests/test_postgres_integration.py
+        TEST_DATABASE_URL="postgresql://..." TEST_DB_ACK="I_UNDERSTAND_THIS_DROPS_TABLES" \
+            python tests/test_postgres_integration.py
 
-安全护栏：
-    - 只认 TEST_DATABASE_URL（不读 DATABASE_URL，避免误连生产）；
-    - 库名必须包含 "test"（否则拒绝执行）；
-    - 会先 drop_all 再 create_all —— 因此必须是真的测试库。
+安全护栏（本套件会 drop_all，宁可拒绝执行也不能误删数据）：
+    1. 只认 TEST_DATABASE_URL（**不读 DATABASE_URL**，避免顺手拿生产连接串）；
+    2. 必须显式设置 TEST_DB_ACK=I_UNDERSTAND_THIS_DROPS_TABLES；
+    3. 库名或主机必须能看出是测试环境（含 test/dev/sandbox/staging）；
+    4. 若设置了 PROD_DB_HOST，目标主机与它相同则直接拒绝
+       —— Neon 的"环境"靠**分支**区分、每个分支库名往往都叫 neondb，
+          这条专门挡住"生产分支 + 库名带 test"这种最危险的情况；
+    5. 连上后若发现 users/study_records 已有数据，同样拒绝（除非 TEST_DB_ALLOW_EXISTING=1）；
+    6. 只读预检：设 TEST_DB_PREFLIGHT=1 只打印目标与既有行数，不删任何东西。
+    任何拒绝都以退出码 2 结束，且**不会打印密码**（连接串一律掩码）。
 
 覆盖：建表与结构校验、词库首次导入与词书统计、注册登录、跨用户隔离、
       学习记录、计划、阅读记录、daily_stats 多用户同日、健康检查与重连、事务回滚。
@@ -34,22 +45,60 @@ if str(TESTS_DIR) not in sys.path:
 
 RAW_URL = (os.environ.get("TEST_DATABASE_URL") or "").strip()
 
+# 破坏性动作的显式确认口令（缺了它，即使给了 URL 也一律不 drop）
+ACK_PHRASE = "I_UNDERSTAND_THIS_DROPS_TABLES"
+
 if not RAW_URL:
     print("=" * 78)
     print("SKIP（未执行）：没有提供 TEST_DATABASE_URL，PostgreSQL 端到端测试本轮未运行。")
     print("  已完成的替代验证：tests/test_db_backend.py（配置/方言/DDL 编译级校验，13 项）")
-    print("  待补：拿到 Neon 测试库后按文件头说明执行本套件。")
+    print("  待补：准备**独立测试分支/库**后，按下面三道护栏执行本套件。")
+    print("  护栏：① TEST_DATABASE_URL 指向独立测试库/Neon 测试分支")
+    print(f"        ② TEST_DB_ACK={ACK_PHRASE}")
+    print("        ③ 目标库里 users 表若已有数据则拒绝（除非 TEST_DB_ALLOW_EXISTING=1）")
+    print(f"  先看目标不删数据：另加 TEST_DB_PREFLIGHT=1")
     print("=" * 78)
     sys.exit(0)
 
 
-def _db_name(url: str) -> str:
-    tail = url.split("?", 1)[0].rsplit("/", 1)[-1]
-    return tail or ""
+def _split_url(url: str) -> tuple[str, str]:
+    """返回 (host, db_name)，纯字符串解析（此时还没导入 SQLAlchemy），不打印凭据"""
+    from urllib.parse import urlparse
+
+    raw = url if "://" in url else "postgresql://" + url
+    parsed = urlparse(raw)
+    return (parsed.hostname or "").lower(), (parsed.path or "").lstrip("/").lower()
 
 
-if "test" not in _db_name(RAW_URL).lower():
-    print(f"拒绝执行：目标库名 {_db_name(RAW_URL)!r} 不含 'test'，本套件会 drop_all，不能指向生产库。")
+TEST_HOST, TEST_DB = _split_url(RAW_URL)
+
+# === 安全护栏：Neon 的"环境"靠**分支**区分，而每个分支的库名往往都叫 neondb ===
+# 因此不能只看库名：把"显式确认 + 生产指纹比对 + 名称特征"三者一起判，任一不过就拒绝执行。
+_refusals: list[str] = []
+
+if os.environ.get("TEST_DB_ACK", "").strip() != ACK_PHRASE:
+    _refusals.append(f"未设置 TEST_DB_ACK={ACK_PHRASE}（本套件会 drop_all，必须有显式确认）")
+
+# 如果用户给了生产分支的主机指纹，目标与它相同就直接拒绝（防呆：拿错连接串最容易发生在这一步）
+_prod_host = (os.environ.get("PROD_DB_HOST") or "").strip().lower()
+if _prod_host and _prod_host == TEST_HOST:
+    _refusals.append("目标主机与 PROD_DB_HOST 相同：这看起来是**生产分支**，拒绝执行")
+
+# 名称特征：库名或主机里要能看出是测试环境（Neon 测试分支可命名为 xxx-test，主机随之变化）
+_looks_test = any(k in TEST_DB for k in ("test", "dev", "sandbox", "staging")) or any(
+    k in TEST_HOST for k in ("test", "dev", "sandbox", "staging")
+)
+if not _looks_test and os.environ.get("TEST_DB_FORCE_NAME", "") != "1":
+    _refusals.append(
+        f"库名/主机看不出测试环境（db={TEST_DB or '?'} host={TEST_HOST or '?'}）；"
+        "请把测试库名或 Neon 测试分支命名成含 test 的形式，或显式设置 TEST_DB_FORCE_NAME=1"
+    )
+
+if _refusals:
+    print("拒绝执行（本套件会 drop_all，宁可不动也不能误删生产数据）：")
+    for r in _refusals:
+        print(f"  - {r}")
+    print(f"  目标：host={TEST_HOST or '?'} db={TEST_DB or '?'}（不打印凭据）")
     sys.exit(2)
 
 # 必须在导入 app.database / app.main 之前把配置指向测试库
@@ -61,6 +110,7 @@ config.DB_BACKEND = "postgresql"
 config.IS_SQLITE = False
 
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.exc import IntegrityError  # noqa: E402
 
 from app.database import Base, SessionLocal, engine, ping  # noqa: E402
@@ -71,10 +121,40 @@ from app.services.word_service import init_words  # noqa: E402
 from app.wordbook_config import apply_wordbook  # noqa: E402
 from testkit import AuthClient  # noqa: E402
 
-# 打印目标（不含凭据），便于确认连对了库
-_safe = engine.url.render_as_string(hide_password=True)
-print(f"PostgreSQL 集成测试目标: {_safe}")
-print(f"  库名: {_db_name(RAW_URL)}（含 test，通过安全护栏）")
+# 打印目标（不含凭据），便于确认连对了分支/库
+print(f"PostgreSQL 集成测试目标: {engine.url.render_as_string(hide_password=True)}")
+print(f"  host={TEST_HOST}  db={TEST_DB}（已通过三道护栏）")
+
+
+# === 护栏 ③：目标库里若已有业务数据，拒绝 drop_all ===
+def _existing_rows() -> dict[str, int]:
+    """统计目标库里 users / study_records 的行数（表不存在计 0）"""
+    counts: dict[str, int] = {}
+    with engine.connect() as conn:
+        for table in ("users", "study_records", "words"):
+            exists = conn.execute(
+                text("SELECT to_regclass(:t)"), {"t": f"public.{table}"}
+            ).scalar()
+            if exists:
+                counts[table] = int(conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar() or 0)
+    return counts
+
+
+_existing = _existing_rows()
+_business_rows = _existing.get("users", 0) + _existing.get("study_records", 0)
+
+if os.environ.get("TEST_DB_PREFLIGHT", "") == "1":
+    print("\nPREFLIGHT（只检查、不删任何东西）：")
+    print(f"  已存在的表行数：{_existing or '（无相关表，目标库是空的）'}")
+    print(f"  业务数据行数（users+study_records）：{_business_rows}")
+    print("  结论：可以安全用于测试" if _business_rows == 0 else "  结论：**不要**用这个库跑测试，请换独立测试库")
+    sys.exit(0)
+
+if _business_rows and os.environ.get("TEST_DB_ALLOW_EXISTING", "") != "1":
+    print("拒绝执行：目标库里已有业务数据，drop_all 会删掉它们。")
+    print(f"  行数：{_existing}")
+    print("  请确认这是独立测试库；确实要清空请显式设置 TEST_DB_ALLOW_EXISTING=1。")
+    sys.exit(2)
 
 results: list[tuple[str, bool, str]] = []
 
@@ -206,7 +286,6 @@ engine.dispose()
 check("引擎重连后仍可查询", ping() is True)
 
 bad_engine_url = "postgresql+psycopg://bad:bad@127.0.0.1:1/nope"
-from sqlalchemy import create_engine, text  # noqa: E402
 
 bad_engine = create_engine(bad_engine_url, pool_pre_ping=True)
 try:
