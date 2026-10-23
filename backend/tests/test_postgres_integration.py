@@ -140,7 +140,17 @@ def _existing_rows() -> dict[str, int]:
     return counts
 
 
-_existing = _existing_rows()
+# 连不上时给可读的结论，而不是把驱动堆栈甩给使用者（也不回显连接串）
+try:
+    _existing = _existing_rows()
+except Exception as exc:  # noqa: BLE001
+    print("拒绝执行：无法连接目标数据库，未做任何改动。")
+    print(f"  异常类型：{type(exc).__name__}")
+    print(f"  目标：host={TEST_HOST or '?'} db={TEST_DB or '?'}（不打印凭据）")
+    print("  排查建议：连接串是否完整（含 ?sslmode=require）、Neon 分支是否已创建完成、")
+    print("            数据库名是否就是 cet4_test、本机网络是否可达该主机。")
+    sys.exit(3)
+
 _business_rows = _existing.get("users", 0) + _existing.get("study_records", 0)
 
 if os.environ.get("TEST_DB_PREFLIGHT", "") == "1":
