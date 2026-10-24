@@ -75,7 +75,7 @@ export default function StarredPage() {
     }
   };
 
-  const tabCount = (which: Tab) => (counts[which] === null ? "" : counts[which]);
+  const tabCountLabel = (which: Tab) => (counts[which] === null ? "" : ` (${counts[which]})`);
 
   return (
     <div className="space-y-5">
@@ -93,7 +93,7 @@ export default function StarredPage() {
               : "text-cocoa-soft hover:text-cocoa"
           }`}
         >
-          ⭐ 生词本 ({tabCount("star")})
+          ⭐ 生词本{tabCountLabel("star")}
         </button>
         <button
           onClick={() => setTab("hard")}
@@ -103,7 +103,7 @@ export default function StarredPage() {
               : "text-cocoa-soft hover:text-cocoa"
           }`}
         >
-          🍓 错题本 ({tabCount("hard")})
+          🍓 错题本{tabCountLabel("hard")}
         </button>
       </div>
 
