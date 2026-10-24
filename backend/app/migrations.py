@@ -423,8 +423,8 @@ def ensure_study_plan_schema(engine: Engine, backup_dir: Path | None = None) -> 
                 wordbook_key VARCHAR(64) NOT NULL,
                 target_date VARCHAR(10),
                 daily_new_words INTEGER NOT NULL DEFAULT 20,
-                created_at VARCHAR(30),
-                updated_at VARCHAR(30)
+                created_at VARCHAR(40),
+                updated_at VARCHAR(40)
             )
             """
         ))
@@ -465,8 +465,8 @@ def ensure_reading_schema(engine: Engine, backup_dir: Path | None = None) -> dic
                 score INTEGER NOT NULL DEFAULT 0,
                 total INTEGER NOT NULL DEFAULT 0,
                 duration_seconds INTEGER DEFAULT 0,
-                completed_at VARCHAR(30),
-                created_at VARCHAR(30)
+                completed_at VARCHAR(40),
+                created_at VARCHAR(40)
             )
             """
         ))

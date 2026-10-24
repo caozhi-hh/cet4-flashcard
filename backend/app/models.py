@@ -6,6 +6,8 @@ from sqlalchemy import Boolean, Column, Float, Integer, String, Text, UniqueCons
 
 from .database import Base
 
+ISO_TIMESTAMP_LENGTH = 40
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -22,8 +24,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     email = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)   # Argon2id 哈希，绝不存明文
-    created_at = Column(String(30), default=_now_iso)
-    last_login_at = Column(String(30))
+    created_at = Column(String(ISO_TIMESTAMP_LENGTH), default=_now_iso)
+    last_login_at = Column(String(ISO_TIMESTAMP_LENGTH))
 
 
 class AuthSession(Base):
@@ -38,10 +40,10 @@ class AuthSession(Base):
     user_id = Column(Integer, nullable=False, index=True)
     token_hash = Column(String(64), nullable=False, unique=True, index=True)
     csrf_token = Column(String(64), nullable=False)       # 同步器令牌（双重提交 + 会话绑定）
-    created_at = Column(String(30), default=_now_iso)
-    expires_at = Column(String(30), nullable=False, index=True)
-    revoked_at = Column(String(30))
-    last_seen_at = Column(String(30))
+    created_at = Column(String(ISO_TIMESTAMP_LENGTH), default=_now_iso)
+    expires_at = Column(String(ISO_TIMESTAMP_LENGTH), nullable=False, index=True)
+    revoked_at = Column(String(ISO_TIMESTAMP_LENGTH))
+    last_seen_at = Column(String(ISO_TIMESTAMP_LENGTH))
 
 
 class Word(Base):
@@ -78,12 +80,12 @@ class StudyRecord(Base):
     know_count = Column(Integer, default=0)        # 连续「认识」次数
     unknown_count = Column(Integer, default=0)     # 连续「不认识」次数
     review_count = Column(Integer, default=0)      # 总复习次数
-    next_review_at = Column(String(30))            # 下次复习时间 ISO 8601（复习队列按此筛选）
-    last_studied_at = Column(String(30))           # 上次学习时间
+    next_review_at = Column(String(ISO_TIMESTAMP_LENGTH))  # 下次复习时间 ISO 8601（复习队列按此筛选）
+    last_studied_at = Column(String(ISO_TIMESTAMP_LENGTH))  # 上次学习时间
     # FSRS 卡片状态（py-fsrs 的 JSON 序列化：state/step/stability/difficulty/due/last_review）
     # 历史记录由 migrations.ensure_fsrs_schema 回填，回填时保留原有 next_review_at
     fsrs_card = Column(Text)
-    created_at = Column(String(30), default=lambda: datetime.now(timezone.utc).isoformat())
+    created_at = Column(String(ISO_TIMESTAMP_LENGTH), default=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class DailyStat(Base):
@@ -120,7 +122,7 @@ class CustomWordbook(Base):
     word_ids = Column(Text)                                # JSON: AI 精选的 word_id 列表
     pos = Column(String(20))                               # 词性过滤，可空
     freq_max = Column(Integer, default=4544)               # 词频上限
-    created_at = Column(String(30), default=lambda: datetime.now(timezone.utc).isoformat())
+    created_at = Column(String(ISO_TIMESTAMP_LENGTH), default=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class ReadingAttempt(Base):
@@ -138,8 +140,8 @@ class ReadingAttempt(Base):
     score = Column(Integer, nullable=False, default=0)
     total = Column(Integer, nullable=False, default=0)
     duration_seconds = Column(Integer, default=0)           # 阅读+作答耗时（前端上报，仅作参考）
-    completed_at = Column(String(30), index=True)
-    created_at = Column(String(30), default=_now_iso)
+    completed_at = Column(String(ISO_TIMESTAMP_LENGTH), index=True)
+    created_at = Column(String(ISO_TIMESTAMP_LENGTH), default=_now_iso)
 
 
 class StudyPlan(Base):
@@ -157,8 +159,8 @@ class StudyPlan(Base):
     wordbook_key = Column(String(64), nullable=False)       # 现有词书体系的 id（含 custom_<id>）
     target_date = Column(String(10))                        # YYYY-MM-DD，可空（不设目标日期）
     daily_new_words = Column(Integer, nullable=False, default=20)
-    created_at = Column(String(30), default=_now_iso)
-    updated_at = Column(String(30), default=_now_iso)
+    created_at = Column(String(ISO_TIMESTAMP_LENGTH), default=_now_iso)
+    updated_at = Column(String(ISO_TIMESTAMP_LENGTH), default=_now_iso)
 
 
 class StarredWord(Base):
@@ -169,4 +171,4 @@ class StarredWord(Base):
     word_id = Column(Integer, nullable=False, index=True)   # 关联 Word.id
     user_id = Column(Integer, nullable=True, index=True)    # 归属用户；NULL = 遗留数据，对任何用户不可见
     type = Column(String(10), nullable=False)               # star 收藏 / hard 错题
-    created_at = Column(String(30), default=lambda: datetime.now(timezone.utc).isoformat())
+    created_at = Column(String(ISO_TIMESTAMP_LENGTH), default=lambda: datetime.now(timezone.utc).isoformat())

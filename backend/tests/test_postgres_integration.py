@@ -213,8 +213,8 @@ with TestClient(app) as boot:
     health = boot.get("/api/health").json()
     check("健康检查含数据库状态", health.get("db") == "ok" and health.get("backend") == "postgresql", str(health))
 
-    a = AuthClient(boot)
-    b = AuthClient(boot)
+    a = AuthClient(app)
+    b = AuthClient(app)
     check("注册并登录（A/B 两个用户）", bool(a.email) and bool(b.email) and a.email != b.email,
           f"{a.email} / {b.email}")
 
@@ -295,7 +295,7 @@ with TestClient(app) as boot:
 engine.dispose()
 check("引擎重连后仍可查询", ping() is True)
 
-bad_engine_url = "postgresql+psycopg://bad:bad@127.0.0.1:1/nope"
+bad_engine_url = "postgresql+psycopg://bad:bad@127.0.0.1:1/nope?connect_timeout=2"
 
 bad_engine = create_engine(bad_engine_url, pool_pre_ping=True)
 try:
