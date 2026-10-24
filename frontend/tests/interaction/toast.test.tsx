@@ -16,6 +16,7 @@ import LoginPage from "@/app/login/page";
 import PlanPage from "@/app/plan/page";
 import HomePage from "@/app/page";
 import ReadingPage from "@/app/reading/page";
+import StarredPage from "@/app/starred/page";
 import AuthGate from "@/components/AuthGate";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ToastProvider } from "@/components/ui/toast";
@@ -815,6 +816,28 @@ async function main() {
   check("标记是否通过", rdText().includes("再读一遍会更好"), "");
   await act(async () => readingRoot.unmount());
   readingHost.remove();
+
+  // === 用例 16：标签数量尚未加载时不显示空括号 ===
+  // 保持请求挂起，稳定复现页面首帧；用户不应看到“生词本 () / 错题本 ()”。
+  (globalThis as any).fetch = async () => new Promise<Response>(() => {});
+  const starredHost = document.createElement("div");
+  document.body.appendChild(starredHost);
+  const starredRoot = createRoot(starredHost);
+  await act(async () => {
+    starredRoot.render(
+      <ToastProvider>
+        <StarredPage />
+      </ToastProvider>
+    );
+  });
+  const starredText = (starredHost.textContent || "").replace(/\s+/g, " ");
+  check(
+    "生词本数量加载前不显示空括号",
+    !starredText.includes("生词本 ()") && !starredText.includes("错题本 ()"),
+    starredText.slice(0, 80)
+  );
+  await act(async () => starredRoot.unmount());
+  starredHost.remove();
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
