@@ -52,10 +52,12 @@ config.DB_PATH = TMP_DIR / "cet4.db"
 config.DATABASE_URL = f"sqlite:///{config.DB_PATH}"
 
 from fastapi.testclient import TestClient  # noqa: E402
+from openai import AsyncOpenAI  # noqa: E402
 
 from app.database import engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.routers import ai as ai_router  # noqa: E402
+from app.services import ai_service  # noqa: E402
 from app.services import rate_limit  # noqa: E402
 from testkit import AuthClient, csrf_headers  # noqa: E402
 
@@ -66,6 +68,11 @@ async def _fake_mnemonic(**_kwargs) -> str:
 
 
 ai_router.generate_mnemonic = _fake_mnemonic
+
+
+def test_ai_provider_client_is_async():
+    """模型请求不能阻塞 FastAPI 单实例的事件循环。"""
+    assert isinstance(ai_service.client, AsyncOpenAI)
 
 
 def _cleanup():

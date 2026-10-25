@@ -21,6 +21,7 @@ import AuthGate from "@/components/AuthGate";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ToastProvider } from "@/components/ui/toast";
 import { computeStats, isCorrect, type WordAttempt } from "@/lib/dictation";
+import { aiApi, wordbookApi } from "@/lib/api";
 import type { FlashCard as CardType } from "@/lib/types";
 // 与 --alias:next/navigation=... 指向同一个文件，因此共享跳转记录
 import { __navigationCalls, __resetNavigation } from "./mocks/next-navigation";
@@ -838,6 +839,30 @@ async function main() {
   );
   await act(async () => starredRoot.unmount());
   starredHost.remove();
+
+  // === 用例 17：AI 请求使用专用长超时，避免模型已成功但前端先报失败 ===
+  const timeoutCalls: number[] = [];
+  const originalTimeout = AbortSignal.timeout;
+  Object.defineProperty(AbortSignal, "timeout", {
+    configurable: true,
+    value: (ms: number) => {
+      timeoutCalls.push(ms);
+      return new AbortController().signal;
+    },
+  });
+  (globalThis as any).fetch = async (input: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (url.includes("/api/ai/mnemonic"))
+      return json({ word_id: 1, word: "absorb", mnemonic: "stub" });
+    if (url.includes("/api/wordbooks/ai-generate"))
+      return json({ id: "custom_1", name: "AI 词书", word_count: 10, is_custom: true });
+    return json({});
+  };
+  await aiApi.getMnemonic(1);
+  await wordbookApi.aiGenerate("校园生活");
+  check("AI 口诀允许 60 秒响应", timeoutCalls[0] === 60_000, JSON.stringify(timeoutCalls));
+  check("AI 词书允许 120 秒响应", timeoutCalls[1] === 120_000, JSON.stringify(timeoutCalls));
+  Object.defineProperty(AbortSignal, "timeout", { configurable: true, value: originalTimeout });
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
