@@ -6,6 +6,8 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 // 单次请求超时：后端没启动时不要让页面无限转圈
 const TIMEOUT_MS = 15000;
+const AI_MNEMONIC_TIMEOUT_MS = 60_000;
+const AI_WORDBOOK_TIMEOUT_MS = 120_000;
 
 // 与后端 app/config.py 保持一致（Cookie 名 / CSRF 头名）
 const CSRF_COOKIE = "cet4_csrf";
@@ -42,7 +44,7 @@ async function ensureCsrfToken(): Promise<string> {
   return readCookie(CSRF_COOKIE);
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function request<T>(path: string, options?: RequestInit, timeoutMs = TIMEOUT_MS): Promise<T> {
   const method = (options?.method ?? "GET").toUpperCase();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -60,7 +62,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     res = await fetch(`${API_BASE}${path}`, {
       // Cookie 会话认证：同源与本地跨端口 dev 都必须带上凭证
       credentials: "include",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       ...options,
       headers,
     });
@@ -222,7 +224,7 @@ export const wordbookApi = {
     request<Wordbook>("/api/wordbooks/ai-generate", {
       method: "POST",
       body: JSON.stringify({ query }),
-    }),
+    }, AI_WORDBOOK_TIMEOUT_MS),
   remove: (id: string) =>
     request<{ message: string }>(`/api/wordbooks/${id}`, { method: "DELETE" }),
 };
@@ -233,7 +235,7 @@ export const aiApi = {
     request<{ word_id: number; word: string; mnemonic: string }>("/api/ai/mnemonic", {
       method: "POST",
       body: JSON.stringify({ word_id: wordId }),
-    }),
+    }, AI_MNEMONIC_TIMEOUT_MS),
 };
 
 /** 生词本/错题本 */

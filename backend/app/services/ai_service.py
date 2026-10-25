@@ -3,13 +3,14 @@
 import json
 import logging
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from ..config import AI_API_KEY, AI_BASE_URL, AI_MODEL
 
 logger = logging.getLogger(__name__)
 
-client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL) if AI_API_KEY else None
+# FastAPI 路由是 async；使用异步客户端，避免模型响应期间阻塞整个单实例。
+client = AsyncOpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL) if AI_API_KEY else None
 
 
 def _extract_json(content: str, start_ch: str = "{", end_ch: str = "}"):
@@ -51,7 +52,7 @@ async def generate_mnemonic(word: str, definition: str, phonetic: str = "", pos:
 风格：实用、易记、不啰嗦。"""
 
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=AI_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
@@ -74,7 +75,7 @@ async def generate_wordbook_words(query: str) -> dict:
 
     prompt = f"""你是大学英语四级词汇专家。用户想创建一本关于「{query}」的单词书。
 
-请直接列出 80-150 个【与该主题强相关】且【属于大学英语四级（CET4）常见词汇】的英文单词（全小写）。
+请直接列出 40-60 个【与该主题强相关】且【属于大学英语四级（CET4）常见词汇】的英文单词（全小写）。
 
 要求：
 - 优先具体名词 + 相关动词/形容词。例：「食物」→ bread, apple, milk, cake, vegetable, meat, rice, fish, egg, cook, eat, taste, hungry, delicious, restaurant, menu, fork, spoon, bowl, dish...
@@ -87,11 +88,11 @@ async def generate_wordbook_words(query: str) -> dict:
 {{"name":"书名(≤8字)","icon":"最能代表主题的emoji","words":["word1","word2","word3"]}}"""
 
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=AI_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.6,
-            max_tokens=2500,
+            max_tokens=1200,
         )
         content = response.choices[0].message.content
         data = _extract_json(content)
@@ -160,7 +161,7 @@ freq_max：泛主题填4544；若明显是高频基础词填2000
 只返回 JSON"""
 
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=AI_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.5,
@@ -201,7 +202,7 @@ async def refine_word_selection(query: str, candidates: list[dict]) -> list[int]
 {{"word_ids":[1,2,3]}}"""
 
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=AI_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
@@ -248,7 +249,7 @@ async def generate_ai_quiz(words: list[dict]) -> list[dict]:
 [{{"type":"fill","word":"xxx","question":"...","hint":"...","answer":"xxx","word_id":123}}, ...]"""
 
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=AI_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.8,
